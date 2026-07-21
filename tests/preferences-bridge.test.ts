@@ -154,6 +154,17 @@ describe('applyPersistedAudioPrefs', () => {
     const { setBusVolume } = await import('../src/buses');
     expect(vi.mocked(setBusVolume)).toHaveBeenCalledWith('master', 0.5, 0);
   });
+
+  it('registers focus-loss muting with every configured bus', async () => {
+    const store = makeStore(makePrefs({}, { muteOnFocusLoss: true }));
+    await applyPersistedAudioPrefs(store, BUS_NAMES);
+
+    window.dispatchEvent(new Event('blur'));
+    const { muteBus } = await import('../src/buses');
+    for (const bus of BUS_NAMES) {
+      expect(vi.mocked(muteBus)).toHaveBeenCalledWith(bus, true);
+    }
+  });
 });
 
 describe('setAndPersistBusVolume', () => {

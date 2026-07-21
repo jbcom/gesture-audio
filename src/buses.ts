@@ -25,6 +25,7 @@ export type AudioBuses<B extends string> = Record<B, Bus> & { limiter: Tone.Limi
 
 let _buses: AudioBuses<string> | null = null;
 let _masterName: string | null = null;
+const _configuredVolumes = new Map<string, number>();
 
 /**
  * Build and wire a Tone.js bus topology from a list of bus names.
@@ -48,10 +49,12 @@ export function buildBuses<B extends string>(names: readonly B[]): AudioBuses<B>
   const busMap: Record<string, Bus> = {
     [masterName]: { gain: masterGain, muted: false },
   };
+  _configuredVolumes.set(masterName, 1);
 
   for (const name of subNames) {
     const gain = new Tone.Gain(1).connect(masterGain);
     busMap[name] = { gain, muted: false };
+    _configuredVolumes.set(name, 1);
   }
 
   const typedBuses = { ...busMap, limiter } as AudioBuses<B>;
@@ -79,6 +82,8 @@ export function setBusVolume<B extends string>(bus: B, linear: number, rampMs = 
   const b = _buses[bus];
   if (!b) return;
   const clamped = Math.max(0, Math.min(1, linear));
+  _configuredVolumes.set(bus, clamped);
+  if (b.muted) return;
   if (rampMs > 0) {
     b.gain.gain.rampTo(clamped, rampMs / 1000);
   } else {
@@ -95,7 +100,7 @@ export function muteBus<B extends string>(bus: B, mute: boolean): void {
   const b = _buses[bus];
   if (!b) return;
   b.muted = mute;
-  b.gain.gain.rampTo(mute ? 0 : b.gain.gain.value, 0.03);
+  b.gain.gain.rampTo(mute ? 0 : (_configuredVolumes.get(bus) ?? 1), 0.03);
 }
 
 /**
@@ -115,7 +120,7 @@ export function duckBus<B extends string>(bus: B, duckDb: number, durationMs?: n
       if (!_buses) return;
       const bb = _buses[bus];
       if (bb && !bb.muted) {
-        bb.gain.gain.rampTo(current, 0.1);
+        bb.gain.gain.rampTo(_configuredVolumes.get(bus) ?? current, 0.1);
       }
     }, durationMs);
   }
@@ -133,6 +138,7 @@ export function disposeBuses(): void {
   _buses.limiter.dispose();
   _buses = null;
   _masterName = null;
+  _configuredVolumes.clear();
 }
 
 /** Exposed for testing / introspection. */

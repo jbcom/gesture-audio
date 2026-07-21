@@ -204,6 +204,26 @@ describe('muteBus', () => {
     const buses = getBuses<(typeof BUS_NAMES)[number]>();
     expect(buses.sfx.gain.gain.value).toBe(0);
   });
+
+  it('unmuting restores the configured gain instead of the muted zero', () => {
+    setBusVolume('sfx', 0.35, 0);
+    muteBus('sfx', true);
+    muteBus('sfx', false);
+
+    const buses = getBuses<(typeof BUS_NAMES)[number]>();
+    expect(buses.sfx.gain.gain.value).toBe(0.35);
+  });
+
+  it('remembers volume changes made while muted without making them audible', () => {
+    muteBus('music', true);
+    setBusVolume('music', 0.65, 0);
+
+    const buses = getBuses<(typeof BUS_NAMES)[number]>();
+    expect(buses.music.gain.gain.value).toBe(0);
+
+    muteBus('music', false);
+    expect(buses.music.gain.gain.value).toBe(0.65);
+  });
 });
 
 describe('duckBus', () => {

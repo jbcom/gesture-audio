@@ -54,7 +54,7 @@ export async function applyPersistedAudioPrefs(
   }
 
   if (prefs.muteOnFocusLoss) {
-    registerFocusLossMute(true, store);
+    registerFocusLossMute(true, store, busNames);
   }
 
   if (prefs.muteAll) {
@@ -170,7 +170,7 @@ export function registerFocusLossMute(
         }
       })
       .catch(() => {
-        // ignore
+        console.warn('[audio-engine/preferences] Could not restore focus-loss mute state');
       });
   };
 

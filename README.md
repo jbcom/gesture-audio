@@ -61,6 +61,10 @@ interface AudioPrefsStore {
 No coupling to a specific persistence manager — wrap whatever the host game
 already uses (localStorage, IndexedDB, a Zustand store, Capacitor Preferences...).
 
+Bus mute is non-destructive: unmuting restores the last configured gain, and
+volume changes made while muted take effect only when the bus is unmuted.
+`muteOnFocusLoss` applies to the full caller-supplied bus list.
+
 ## `@arcade-cabinet/audio-engine/build-tools`
 
 A generic CI asset verifier (`verifySprites` / `runVerifySpritesCli`),

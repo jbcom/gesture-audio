@@ -1,0 +1,54 @@
+{
+  "name": "@arcade-cabinet/audio-engine",
+  "version": "0.1.0",
+  "description": "Gesture-gated Tone.js bus graph + Howler sprite resolver + preferences bridge, extracted from on-the-ropes.",
+  "type": "module",
+  "license": "MIT",
+  "sideEffects": false,
+  "exports": {
+    ".": {
+      "types": "./dist/types/index.d.ts",
+      "import": "./dist/esm/index.js",
+      "require": "./dist/cjs/index.cjs"
+    },
+    "./build-tools": {
+      "types": "./dist/types/build-tools/index.d.ts",
+      "import": "./dist/esm/build-tools/index.js",
+      "require": "./dist/cjs/build-tools/index.cjs"
+    },
+    "./package.json": "./package.json"
+  },
+  "main": "./dist/cjs/index.cjs",
+  "module": "./dist/esm/index.js",
+  "types": "./dist/types/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "pnpm run clean && pnpm run build:esm && pnpm run build:cjs && pnpm run build:types",
+    "build:esm": "tsc -p tsconfig.esm.json",
+    "build:cjs": "tsc -p tsconfig.cjs.json && node scripts/rename-cjs.mjs",
+    "build:types": "tsc -p tsconfig.types.json",
+    "clean": "rimraf dist",
+    "test": "vitest run",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "peerDependencies": {
+    "howler": "^2.2.4",
+    "tone": "^15.0.0"
+  },
+  "devDependencies": {
+    "@types/howler": "^2.2.12",
+    "@types/node": "^22.0.0",
+    "howler": "^2.2.4",
+    "jsdom": "^29.1.0",
+    "rimraf": "^6.0.1",
+    "tone": "^15.1.22",
+    "typescript": "^6.0.3",
+    "vitest": "^4.1.5"
+  },
+  "publishConfig": {
+    "access": "restricted",
+    "registry": "https://redacted-private-registry.example/api/packages/arcade-cabinet/npm/"
+  }
+}

@@ -1,6 +1,6 @@
 {
   "name": "@arcade-cabinet/audio-engine",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Gesture-gated Tone.js bus graph + Howler sprite resolver + preferences bridge, extracted from on-the-ropes.",
   "type": "module",
   "license": "MIT",

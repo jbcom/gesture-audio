@@ -46,6 +46,11 @@ registerAudioGestureTrigger(bootstrap);
 playCue('drawer-open', 'sfx');
 ```
 
+Unlock and bootstrap are one retryable transaction: concurrent callers share
+the same in-flight attempt, the engine reports started only after both stages
+succeed, and gesture listeners remain armed after a rejected attempt so the
+next real interaction can try again.
+
 ### Preferences store contract
 
 `applyPersistedAudioPrefs` / `setAndPersistBusVolume` / `syncAudioPrefsFromSettings`

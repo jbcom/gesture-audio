@@ -16,9 +16,11 @@ vi.mock('tone', () => ({
 import { _resetAudioEngine, isAudioEngineStarted, registerAudioGestureTrigger, startAudioEngine } from '../src';
 
 describe('startAudioEngine', () => {
-  beforeEach(() => {
+  beforeEach(async () => {
     _resetAudioEngine();
     vi.clearAllMocks();
+    const { start } = await import('tone');
+    vi.mocked(start).mockReset().mockResolvedValue(undefined);
   });
   afterEach(() => {
     _resetAudioEngine();
@@ -65,15 +67,52 @@ describe('startAudioEngine', () => {
     expect(order).toEqual(['tone-start', 'bootstrap']);
   });
 
-  it('propagates a bootstrap rejection but leaves the engine marked started (idempotent guard already set)', async () => {
-    const bootstrap = vi.fn().mockRejectedValue(new Error('boom'));
+  it('leaves bootstrap failures retryable', async () => {
+    const bootstrap = vi
+      .fn()
+      .mockRejectedValueOnce(new Error('boom'))
+      .mockResolvedValueOnce(undefined);
     await expect(startAudioEngine(bootstrap)).rejects.toThrow('boom');
+    expect(isAudioEngineStarted()).toBe(false);
+    await expect(startAudioEngine(bootstrap)).resolves.toBeUndefined();
+    expect(isAudioEngineStarted()).toBe(true);
+    expect(bootstrap).toHaveBeenCalledTimes(2);
+  });
+
+  it('leaves Tone unlock failures retryable', async () => {
+    const { start } = await import('tone');
+    vi.mocked(start).mockRejectedValueOnce(new Error('locked')).mockResolvedValueOnce(undefined);
+    const bootstrap = vi.fn().mockResolvedValue(undefined);
+    await expect(startAudioEngine(bootstrap)).rejects.toThrow('locked');
+    expect(isAudioEngineStarted()).toBe(false);
+    expect(bootstrap).not.toHaveBeenCalled();
+    await expect(startAudioEngine(bootstrap)).resolves.toBeUndefined();
+    expect(isAudioEngineStarted()).toBe(true);
+  });
+
+  it('shares one in-flight unlock across concurrent callers', async () => {
+    const { start } = await import('tone');
+    let release: (() => void) | undefined;
+    vi.mocked(start).mockImplementationOnce(
+      () => new Promise<void>((resolve) => {
+        release = resolve;
+      }),
+    );
+    const bootstrap = vi.fn().mockResolvedValue(undefined);
+    const first = startAudioEngine(bootstrap);
+    const second = startAudioEngine(bootstrap);
+    release?.();
+    await Promise.all([first, second]);
+    expect(start).toHaveBeenCalledTimes(1);
+    expect(bootstrap).toHaveBeenCalledTimes(1);
   });
 });
 
 describe('registerAudioGestureTrigger', () => {
-  beforeEach(() => {
+  beforeEach(async () => {
     _resetAudioEngine();
+    const { start } = await import('tone');
+    vi.mocked(start).mockReset().mockResolvedValue(undefined);
   });
   afterEach(() => {
     _resetAudioEngine();
@@ -101,6 +140,34 @@ describe('registerAudioGestureTrigger', () => {
     document.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     await new Promise((r) => setTimeout(r, 20));
     document.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true }));
+    await new Promise((r) => setTimeout(r, 20));
+    expect(bootstrap).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps listeners armed after a failed unlock so a later gesture retries', async () => {
+    const { start } = await import('tone');
+    const warning = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    vi.mocked(start).mockRejectedValueOnce(new Error('locked')).mockResolvedValueOnce(undefined);
+    const bootstrap = vi.fn().mockResolvedValue(undefined);
+    registerAudioGestureTrigger(bootstrap);
+
+    document.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    await new Promise((r) => setTimeout(r, 20));
+    expect(isAudioEngineStarted()).toBe(false);
+    expect(bootstrap).not.toHaveBeenCalled();
+
+    document.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true }));
+    await new Promise((r) => setTimeout(r, 20));
+    expect(isAudioEngineStarted()).toBe(true);
+    expect(bootstrap).toHaveBeenCalledTimes(1);
+    warning.mockRestore();
+  });
+
+  it('does not register duplicate gesture handlers', async () => {
+    const bootstrap = vi.fn().mockResolvedValue(undefined);
+    registerAudioGestureTrigger(bootstrap);
+    registerAudioGestureTrigger(bootstrap);
+    document.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     await new Promise((r) => setTimeout(r, 20));
     expect(bootstrap).toHaveBeenCalledTimes(1);
   });

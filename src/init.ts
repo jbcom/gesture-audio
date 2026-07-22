@@ -19,6 +19,8 @@
 import * as Tone from 'tone';
 
 let _started = false;
+let _startPromise: Promise<void> | null = null;
+let _generation = 0;
 const _gestureHandlers = new Map<EventTarget, (ev: Event) => void>();
 
 const GESTURE_EVENTS = ['click', 'keydown', 'touchstart'] as const;
@@ -34,12 +36,24 @@ const GESTURE_EVENTS = ['click', 'keydown', 'touchstart'] as const;
  */
 export async function startAudioEngine(bootstrap: () => Promise<void>): Promise<void> {
   if (_started) return;
-  _started = true;
+  if (_startPromise) return _startPromise;
 
-  // Resume / start Tone.js AudioContext (requires user gesture)
-  await Tone.start();
+  const generation = _generation;
+  const attempt = (async () => {
+    // Resume / start Tone.js AudioContext (requires user gesture).
+    // Do not mark the lifecycle started until caller bootstrap also succeeds:
+    // autoplay policy and transient device failures must remain retryable.
+    await Tone.start();
+    await bootstrap();
+    if (generation === _generation) _started = true;
+  })();
+  _startPromise = attempt;
 
-  await bootstrap();
+  try {
+    await attempt;
+  } finally {
+    if (_startPromise === attempt) _startPromise = null;
+  }
 }
 
 /**
@@ -49,16 +63,23 @@ export async function startAudioEngine(bootstrap: () => Promise<void>): Promise<
  * @param bootstrap - same callback passed to startAudioEngine
  */
 export function registerAudioGestureTrigger(bootstrap: () => Promise<void>): void {
-  if (_started || typeof document === 'undefined') return;
+  if (_started || typeof document === 'undefined' || _gestureHandlers.has(document)) return;
 
-  const handler = (): void => {
-    startAudioEngine(bootstrap).catch((err) => {
-      console.warn('[audio-engine/init] Failed to start audio engine:', err);
-    });
+  const removeHandlers = (): void => {
     for (const ev of GESTURE_EVENTS) {
       document.removeEventListener(ev, handler, { capture: true });
     }
     _gestureHandlers.delete(document);
+  };
+
+  const handler = (): void => {
+    startAudioEngine(bootstrap)
+      .then(removeHandlers)
+      .catch((err) => {
+        // Keep the gesture handlers armed: a later real interaction can retry
+        // after autoplay policy or a transient audio-device failure clears.
+        console.warn('[audio-engine/init] Failed to start audio engine:', err);
+      });
   };
 
   for (const ev of GESTURE_EVENTS) {
@@ -92,6 +113,8 @@ export function _resetAudioEngine(): void {
       }
     }
   }
+  _generation += 1;
   _started = false;
+  _startPromise = null;
   _gestureHandlers.clear();
 }

@@ -5,14 +5,18 @@ Thanks for taking the time to contribute.
 ## Getting set up
 
 ```sh
-corepack enable
+mise install   # installs the Node + pnpm versions this repo pins
 pnpm install
-pnpm verify   # lint, typecheck, test, build — the same gate CI runs
+pnpm verify     # lint, typecheck, test, build — the same gate CI runs
 ```
 
-Node and pnpm versions are pinned in `package.json` under `engines` and
-`packageManager`. Use `corepack` rather than a globally installed pnpm so your
-version matches CI.
+[mise](https://mise.jdx.dev) is a local-only convenience — it reads the same
+two idiomatic files CI's official actions read, so no version is pinned
+twice: `.nvmrc` for Node (`actions/setup-node`) and
+`package.json#packageManager` for pnpm (`pnpm/action-setup`). CI does not
+depend on mise. `package.json#engines.node` states the minimum supported
+Node version; CI's `compatibility` job in `ci.yml` matrix-tests the full
+supported range (earliest non-deprecated LTS through latest stable).
 
 ## Making a change
 

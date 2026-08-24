@@ -185,7 +185,7 @@ inside its callback.
 ## Development
 
 ```sh
-corepack enable
+mise install
 pnpm install --frozen-lockfile
 pnpm verify
 ```

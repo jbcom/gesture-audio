@@ -34,7 +34,7 @@ const GESTURE_EVENTS = ['click', 'keydown', 'touchstart'] as const;
  *                    sprite maps, applies persisted preferences, starts any
  *                    ambience — whatever the game needs after Tone.start().
  */
-export async function startAudioEngine(bootstrap: () => Promise<void>): Promise<void> {
+export async function startAudioEngine(bootstrap: () => void | Promise<void>): Promise<void> {
   if (_started) return;
   if (_startPromise) return _startPromise;
 
@@ -62,8 +62,17 @@ export async function startAudioEngine(bootstrap: () => Promise<void>): Promise<
  *
  * @param bootstrap - same callback passed to startAudioEngine
  */
-export function registerAudioGestureTrigger(bootstrap: () => Promise<void>): void {
-  if (_started || typeof document === 'undefined' || _gestureHandlers.has(document)) return;
+export function registerAudioGestureTrigger(bootstrap: () => void | Promise<void>): () => void {
+  if (_started || typeof document === 'undefined') return () => undefined;
+  const existing = _gestureHandlers.get(document);
+  if (existing) {
+    return () => {
+      for (const event of GESTURE_EVENTS) {
+        document.removeEventListener(event, existing, { capture: true });
+      }
+      _gestureHandlers.delete(document);
+    };
+  }
 
   const removeHandlers = (): void => {
     for (const ev of GESTURE_EVENTS) {
@@ -91,6 +100,7 @@ export function registerAudioGestureTrigger(bootstrap: () => Promise<void>): voi
   }
 
   _gestureHandlers.set(document, handler);
+  return removeHandlers;
 }
 
 /**

@@ -1,83 +1,115 @@
 # @jbdevprimary/gesture-audio
 
+![A fingertip unlocks four audio lanes that converge through a limiter into one waveform.](./docs/assets/gesture-audio-hero.webp)
+
 [![CI](https://github.com/jbcom/gesture-audio/actions/workflows/ci.yml/badge.svg)](https://github.com/jbcom/gesture-audio/actions/workflows/ci.yml)
+[![CodeQL](https://github.com/jbcom/gesture-audio/actions/workflows/codeql.yml/badge.svg)](https://github.com/jbcom/gesture-audio/actions/workflows/codeql.yml)
 [![npm](https://img.shields.io/npm/v/@jbdevprimary/gesture-audio.svg)](https://www.npmjs.com/package/@jbdevprimary/gesture-audio)
-[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](./LICENSE)
+[![License: MIT](https://img.shields.io/badge/License-MIT-0b2239.svg)](./LICENSE)
 
-**Browsers refuse to start audio until the user has interacted with the page.**
-Getting that wrong is silent — no error, no sound, and a bug report that says
-"audio doesn't work sometimes."
+Gesture-gated browser audio that starts reliably, mixes predictably, and keeps
+application policy in your application.
 
-`gesture-audio` makes the unlock the center of the design rather than an
-afterthought. It defers every bit of audio initialisation until a real user
-gesture arrives, treats unlock-and-bootstrap as one retryable transaction, and
-only then reports the engine as started.
+Browsers will not resume a Web Audio context until a person interacts with the
+page. A partial unlock is especially troublesome: the context can resume while
+sample loading or preference hydration fails, leaving an app that believes
+audio is ready when it is not. `gesture-audio` treats unlock and bootstrap as
+one concurrent-safe, retryable transaction.
 
-Around that it provides the two pieces most apps end up writing anyway: a
-[Tone.js](https://tonejs.github.io) bus graph (master → limiter → destination,
-plus your own named sub-buses) and a [Howler](https://howlerjs.com) sprite
-resolver for sample playback, wired to a preferences store you supply.
+It also provides the infrastructure most interactive apps need around that
+boundary:
 
-It deliberately contains no app-specific concepts — no cue vocabularies, no
-mixing policy. Those stay in your app.
+- a typed, caller-named Tone.js bus graph with a master limiter;
+- non-destructive, independently layered mute and timed ducking behavior;
+- a validated Howler sprite-map resolver whose active sounds follow live mix changes;
+- a persistence bridge for any small async preferences store; and
+- a Node-only asset verifier for sprite structure, duration, loudness, orphans, and size.
+
+The package deliberately does not define cue names, gameplay policy, or a
+persistence framework. Those remain local to the application.
 
 ## Install
+
+Node 22 or newer is required for build tooling. The runtime supports modern
+browsers with Web Audio, `fetch`, and the event APIs used by Tone.js and Howler.
 
 ```sh
 npm install @jbdevprimary/gesture-audio tone howler
 ```
 
-`tone` and `howler` are peer dependencies — bring your own pinned versions.
+`tone` and `howler` are peer dependencies, so the application owns their versions.
 
-## Usage
+## Quick start
 
 ```ts
 import {
+  applyPersistedAudioPrefs,
   buildBuses,
-  registerAudioGestureTrigger,
   initSpriteResolver,
   playCue,
-  applyPersistedAudioPrefs,
+  registerAudioGestureTrigger,
+  setResolverMasterBus,
 } from '@jbdevprimary/gesture-audio';
 
-const BUS_NAMES = ['master', 'music', 'sfx', 'voice', 'crowd'] as const;
+const BUS_NAMES = ['master', 'music', 'sfx', 'voice'] as const;
 
-async function bootstrap() {
+async function bootstrapAudio() {
   buildBuses(BUS_NAMES);
-  await initSpriteResolver({ spriteMapUrl: '/audio/sprite-map.json' });
-  await applyPersistedAudioPrefs(myPrefsStore, BUS_NAMES);
+  setResolverMasterBus('master');
+  await initSpriteResolver({
+    spriteMapUrl: '/audio/sprite-map.json',
+    audioBaseUrl: '/audio',
+    strict: true,
+  });
+  await applyPersistedAudioPrefs(preferences, BUS_NAMES);
 }
 
-// Defers all audio init until the first user gesture (a browser requirement).
-registerAudioGestureTrigger(bootstrap);
+// Keep this registration early in application startup. Audio work itself does
+// not run until click, keydown, or touchstart supplies the required gesture.
+const removeGestureTrigger = registerAudioGestureTrigger(bootstrapAudio);
 
-// Later, anywhere in the app:
-playCue('drawer-open', 'sfx');
+// Later, after bootstrap has completed:
+const soundId = playCue('drawer-open', 'sfx');
 ```
 
-### Why the unlock is a transaction
+The returned cleanup function is useful during hot reload or component
+unmount. Concurrent gestures and direct `startAudioEngine()` calls share one
+in-flight attempt. Listeners are removed only after both Tone unlock and the
+application bootstrap succeed; a rejected attempt stays retryable.
 
-Unlock and bootstrap succeed or fail together:
+See [`examples/browser-bootstrap.ts`](./examples/browser-bootstrap.ts) for a
+complete local-storage-backed example.
 
-- **Concurrent callers share one in-flight attempt.** Two gestures racing will
-  not build the bus graph twice.
-- **The engine reports `started` only after both stages succeed** — not after
-  the `AudioContext` resumes but before your samples load.
-- **A rejected attempt leaves the gesture listeners armed**, so the next real
-  interaction retries instead of leaving the app permanently silent.
+## Sprite maps
 
-That last point is the one that is easy to miss: an unlock can fail, and if you
-tear the listeners down on the first try, there is no second one.
+Both flat and file-grouped maps are accepted. Times are milliseconds and
+`file` is relative to `audioBaseUrl`, without an extension.
 
-### Preferences store contract
+```json
+{
+  "ui/sprite": {
+    "drawer-open": {
+      "start_ms": 0,
+      "end_ms": 450,
+      "file": "ui/sprite"
+    }
+  }
+}
+```
 
-`applyPersistedAudioPrefs` / `setAndPersistBusVolume` / `syncAudioPrefsFromSettings`
-accept any store satisfying:
+The default formats are `webm` and `m4a`. Invalid offsets, empty file names,
+duplicates, and malformed entries are filtered with an actionable warning.
+Use `strict: true` in production bootstrap or tests to reject the entire map
+instead. A missing map degrades to a no-op resolver by default.
+
+## Preferences contract
+
+The bridge accepts any store with this shape:
 
 ```ts
 interface AudioPrefsStore {
   get(): Promise<{
-    audioVolumes: Record<string, number>;
+    audioVolumes: Record<string, number>; // integer percentages, 0-100
     muteOnFocusLoss?: boolean;
     muteAll?: boolean;
   }>;
@@ -85,149 +117,88 @@ interface AudioPrefsStore {
 }
 ```
 
-No coupling to a specific persistence layer — wrap whatever you already use
-(localStorage, IndexedDB, a Zustand store, Capacitor Preferences, …).
+Values are rounded and clamped before runtime application and persistence.
+Failed writes restore the previous live mix before rethrowing. Focus-loss and
+global-preference mutes are separate layers, so regaining focus cannot
+accidentally undo an explicit user mute. The bridge never writes settings while
+applying runtime mute behavior.
 
-Bus mute is non-destructive: unmuting restores the last configured gain, and
-volume changes made while muted take effect when the bus is unmuted.
-`muteOnFocusLoss` applies to the full bus list you supply.
+## Public API
 
-## API reference
+| Area | Exports |
+| --- | --- |
+| Lifecycle | `startAudioEngine`, `registerAudioGestureTrigger`, `isAudioEngineStarted` |
+| Tone buses | `buildBuses`, `getBuses`, `setBusVolume`, `muteBus`, `duckBus`, `disposeBuses` |
+| Sprites | `initSpriteResolver`, `playCue`, `stopCue`, `setResolverVolume`, `setResolverMute`, `setResolverMasterBus`, `disposeSpriteResolver` |
+| Preferences | `applyPersistedAudioPrefs`, `setAndPersistBusVolume`, `setAndPersistBusMute`, `syncAudioPrefsFromSettings`, `registerFocusLossMute` |
+| Build tools | `verifySprites`, `runVerifySpritesCli` from `@jbdevprimary/gesture-audio/build-tools` |
 
-The example above covers the common path — build buses, load the sprite map,
-apply prefs, defer everything behind a gesture. The rest of the public API:
+Bus gain is linear from `0` to `1`. Preference volume is an integer percentage
+from `0` to `100`. The first bus passed to `buildBuses` is the master/root bus;
+names must be non-empty and unique, and `limiter` is reserved. Rebuilding with
+a different topology requires `disposeBuses()` first.
 
-### Bus control (`buses.ts`)
+`duckBus(name, negativeDb, durationMs?)` replaces any existing duck for that
+bus. A volume change during ducking updates the remembered base level without
+removing the attenuation.
 
-```ts
-import { getBuses, setBusVolume, muteBus, duckBus, disposeBuses } from '@jbdevprimary/gesture-audio';
+## Asset verification
 
-// Read the live topology built by buildBuses() — same object every call.
-const buses = getBuses<(typeof BUS_NAMES)[number]>();
-
-// Settings-panel slider: 0-1 linear gain, ramped over 50ms by default.
-setBusVolume('music', 0.6);
-setBusVolume('sfx', 0.8, 0); // rampMs=0 — instant, e.g. on startup
-
-// Mute/unmute non-destructively — unmuting restores the last configured level.
-muteBus('voice', true);
-muteBus('voice', false);
-
-// Ducking: temporarily attenuate a bus by a dB amount, auto-restoring after
-// durationMs (e.g. duck music while a narration line plays).
-duckBus('music', -12, 2000);
-
-// Tear down the whole graph — app unmount, hot-reload, or test cleanup.
-disposeBuses();
-```
-
-### Engine lifecycle (`init.ts`)
-
-```ts
-import { startAudioEngine, isAudioEngineStarted } from '@jbdevprimary/gesture-audio';
-
-// Usually you don't call this directly — registerAudioGestureTrigger wires
-// it to the first click/keydown/touchstart. But a "Tap to start" overlay
-// can call it explicitly from its own click handler (which is itself a
-// user gesture, so this is safe):
-async function onTapToStart() {
-  await startAudioEngine(bootstrap);
-}
-
-// Gate UI on whether audio is live yet (e.g. hide the "tap to start" overlay).
-if (isAudioEngineStarted()) {
-  /* show the game, hide the overlay */
-}
-```
-
-### Preferences bridge extras (`preferences-bridge.ts`)
-
-```ts
-import { setAndPersistBusMute, registerFocusLossMute } from '@jbdevprimary/gesture-audio';
-
-// Mute a single bus at runtime (e.g. a per-bus mute button). Unlike
-// setAndPersistBusVolume this is NOT persisted to the store — persist it
-// yourself (e.g. by storing volume=0) if it needs to survive reload.
-setAndPersistBusMute('voice', true);
-
-// Auto-mute every configured bus on window blur, restoring on focus only if
-// the store still reports muteOnFocusLoss: true at that time. Call with
-// enabled=false to tear the listeners down.
-registerFocusLossMute(true, myPrefsStore, BUS_NAMES);
-registerFocusLossMute(false);
-```
-
-### Sprite resolver extras (`sprite-resolver.ts`)
-
-```ts
-import {
-  stopCue,
-  setResolverVolume,
-  setResolverMute,
-  setResolverMasterBus,
-  disposeSpriteResolver,
-} from '@jbdevprimary/gesture-audio';
-
-// playCue() returns a Howler sound id you can stop early (e.g. a looping
-// cue interrupted by a state change).
-const id = playCue('crowd-riot-loop', 'crowd');
-stopCue(id);
-
-// Lower-level volume/mute knobs the preferences bridge calls for you —
-// use these directly only if you're not going through
-// applyPersistedAudioPrefs/setAndPersistBusVolume.
-setResolverVolume('sfx', 0.8);
-setResolverMute('sfx', false);
-
-// Designate which bus name acts as the resolver's "master" override (mutes
-// / scales every cue regardless of target bus). Optional — buses.ts already
-// treats its first bus name as master by convention, and the preferences
-// bridge relies on that; call this only if your resolver's master bus name
-// differs from what you pass to applyPersistedAudioPrefs.
-setResolverMasterBus('master');
-
-// Tear down all loaded Howl instances — tests / hot-reload.
-disposeSpriteResolver();
-```
-
-## `@jbdevprimary/gesture-audio/build-tools`
-
-A generic CI asset verifier (`verifySprites` / `runVerifySpritesCli`) that
-checks sprite-bus file presence, sprite-map offset/duration sanity, orphan
-files, LUFS loudness targets (via `ffmpeg`/`ffprobe`), and a total byte budget.
-Fully parameterised — no bus or cue names are baked in.
+The build-only entry point uses Node APIs and is kept out of the browser entry:
 
 ```ts
 import { runVerifySpritesCli } from '@jbdevprimary/gesture-audio/build-tools';
 
 await runVerifySpritesCli({
   audioRoot: 'public/audio',
-  spriteBuses: ['ui', 'impact', 'whoosh'],
-  flatGroups: [{ dir: 'crowd-bed', keys: ['silent', 'murmur', 'invested', 'pop', 'riot'] }],
+  spriteBuses: ['ui', 'impact'],
+  flatGroups: [{ dir: 'music', keys: ['menu', 'gameplay'], required: true }],
   maxTotalBytes: 12 * 1024 * 1024,
   fast: process.argv.includes('--fast'),
 });
 ```
 
-This entrypoint is build-time only and uses Node APIs; it is not part of the
-browser bundle.
+Full mode requires `ffmpeg` and `ffprobe` on `PATH` for duration and LUFS
+checks. `fast: true` performs structural and budget checks without decoding
+audio. Declared sprite buses are required; optional flat groups warn, while
+`required: true` makes missing files fail.
 
-## Compatibility
+## Architecture and compatibility
 
-Ships dual ESM and CommonJS builds with separate type declarations for each, so
-`import` and `require` both resolve correctly under Node16 module resolution.
-Verified in CI with [publint](https://publint.dev) and
-[are-the-types-wrong](https://arethetypeswrong.github.io).
+The runtime dependency direction is intentionally one-way: lifecycle unlocks
+the caller bootstrap; Tone owns the continuous bus graph; Howler owns sample
+playback; the preference bridge mirrors policy into both. Details and
+invariants are in [`docs/architecture.md`](./docs/architecture.md).
+
+The package ships ESM and CommonJS builds with distinct declarations and
+exports. CI checks real packed imports plus `publint` and
+`are-the-types-wrong`. Browser globals are accessed only when the relevant API
+is called, so server-side importing is safe; starting playback still requires a browser.
+
+## Troubleshooting
+
+Common autoplay, silent-cue, sprite-format, and `ffmpeg` failures are covered
+in [`docs/troubleshooting.md`](./docs/troubleshooting.md). The most important
+rule is to register the gesture trigger early and do all audio bootstrap work
+inside its callback.
 
 ## Development
 
 ```sh
-pnpm install
-pnpm verify     # lint, typecheck, test, build, package checks
+corepack enable
+pnpm install --frozen-lockfile
+pnpm verify
 ```
 
-See [CONTRIBUTING.md](./CONTRIBUTING.md).
+`pnpm verify` runs formatting/lint checks, strict TypeScript, behavioral tests
+with enforced coverage thresholds, both module builds, packed import smoke
+tests, and package metadata/type validation. See
+[`CONTRIBUTING.md`](./CONTRIBUTING.md) and [`SECURITY.md`](./SECURITY.md).
+
+Releases use Conventional Commit titles and release-please; npm publishing is
+performed from the generated Git tag with provenance. See
+[`docs/releasing.md`](./docs/releasing.md).
 
 ## License
 
-[MIT](./LICENSE)
+[MIT](./LICENSE) © 2026 Jon Bogaty

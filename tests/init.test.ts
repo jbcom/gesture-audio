@@ -72,6 +72,12 @@ describe('startAudioEngine', () => {
     expect(order).toEqual(['tone-start', 'bootstrap']);
   });
 
+  it('accepts a synchronous bootstrap callback', async () => {
+    const bootstrap = vi.fn();
+    await expect(startAudioEngine(bootstrap)).resolves.toBeUndefined();
+    expect(bootstrap).toHaveBeenCalledOnce();
+  });
+
   it('leaves bootstrap failures retryable', async () => {
     const bootstrap = vi
       .fn()
@@ -201,5 +207,24 @@ describe('registerAudioGestureTrigger', () => {
     document.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     await new Promise((r) => setTimeout(r, 20));
     expect(bootstrap).toHaveBeenCalledTimes(1);
+  });
+
+  it('lets a duplicate registration return cleanup for the existing handler', async () => {
+    const firstBootstrap = vi.fn().mockResolvedValue(undefined);
+    registerAudioGestureTrigger(firstBootstrap);
+    const removeExisting = registerAudioGestureTrigger(vi.fn().mockResolvedValue(undefined));
+    removeExisting();
+    document.dispatchEvent(new Event('click'));
+    await Promise.resolve();
+    expect(firstBootstrap).not.toHaveBeenCalled();
+  });
+
+  it('returns a cleanup function that removes gesture listeners', async () => {
+    const bootstrap = vi.fn().mockResolvedValue(undefined);
+    const cleanup = registerAudioGestureTrigger(bootstrap);
+    cleanup();
+    document.dispatchEvent(new Event('click'));
+    await Promise.resolve();
+    expect(bootstrap).not.toHaveBeenCalled();
   });
 });

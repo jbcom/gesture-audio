@@ -27,13 +27,32 @@ jobs:
         run: |
           pnpm install --lockfile-only
           git diff --exit-code pnpm-lock.yaml
-      - run: pnpm lint
+      - run: pnpm verify
+
+  compatibility:
+    name: Node ${{ matrix.node }} / ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-24.04
+            node: 22
+          - os: ubuntu-24.04
+            node: 26
+          - os: windows-latest
+            node: 24
+          - os: macos-latest
+            node: 24
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+      - run: corepack enable
+      - run: pnpm install --frozen-lockfile
       - run: pnpm typecheck
-      - run: pnpm coverage
+      - run: pnpm test
       - run: pnpm build
-      # A published package whose types or exports are broken is worse than one
-      # that fails to build: consumers only find out at integration time.
-      # Uses the pinned devDependencies, not floating `dlx` versions, so a CI
-      # run is reproducible.
-      - name: Package is consumable
-        run: pnpm run check:package
+      - run: pnpm check:imports

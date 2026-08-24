@@ -32,7 +32,12 @@
   "module": "./dist/esm/index.js",
   "types": "./dist/types/index.d.ts",
   "files": [
-    "dist"
+    "dist",
+    "docs",
+    "examples",
+    "CHANGELOG.md",
+    "CONTRIBUTING.md",
+    "SECURITY.md"
   ],
   "scripts": {
     "build": "pnpm run clean && pnpm run build:esm && pnpm run build:cjs && pnpm run build:types && pnpm run build:types-cjs",
@@ -43,11 +48,15 @@
     "test": "vitest run",
     "coverage": "vitest run --coverage",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "verify": "pnpm run lint && pnpm run typecheck && pnpm run test && pnpm run build && pnpm run check:package",
+    "verify": "pnpm run lint && pnpm run typecheck && pnpm run coverage && pnpm run build && pnpm run check:docs && pnpm run check:imports && pnpm run check:package",
     "build:types-cjs": "tsc -p tsconfig.types-cjs.json && node scripts/rename-cts.mjs",
     "check:package": "publint && attw --pack .",
+    "check:docs": "node scripts/check-docs.mjs",
+    "check:imports": "node scripts/smoke-imports.mjs",
     "lint": "biome check .",
-    "lint:fix": "biome check --write ."
+    "lint:fix": "biome check --write .",
+    "test:watch": "vitest",
+    "prepack": "pnpm build"
   },
   "peerDependencies": {
     "howler": "^2.2.4",

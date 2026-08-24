@@ -16,6 +16,8 @@ const howlerState = vi.hoisted(() => ({
     play: ReturnType<typeof vi.fn>;
     stop: ReturnType<typeof vi.fn>;
     volume: ReturnType<typeof vi.fn>;
+    once: ReturnType<typeof vi.fn>;
+    off: ReturnType<typeof vi.fn>;
     unload: ReturnType<typeof vi.fn>;
   }>,
   nextSoundId: 1,
@@ -28,6 +30,8 @@ vi.mock('howler', () => {
     play: ReturnType<typeof vi.fn>;
     stop: ReturnType<typeof vi.fn>;
     volume: ReturnType<typeof vi.fn>;
+    once: ReturnType<typeof vi.fn>;
+    off: ReturnType<typeof vi.fn>;
     unload: ReturnType<typeof vi.fn>;
 
     constructor(_opts: {
@@ -49,11 +53,15 @@ vi.mock('howler', () => {
       const unload = vi.fn(() => {
         s.unloadCalled = true;
       });
+      const once = vi.fn();
+      const off = vi.fn();
       this.play = play;
       this.stop = stop;
       this.volume = volume;
+      this.once = once;
+      this.off = off;
       this.unload = unload;
-      s.instances.push({ play, stop, volume, unload });
+      s.instances.push({ play, stop, volume, once, off, unload });
     }
   }
 
@@ -156,6 +164,63 @@ describe('initSpriteResolver', () => {
     const instancesAfterFirst = howlerState.instances.length;
     await initSpriteResolver();
     expect(howlerState.instances.length).toBe(instancesAfterFirst);
+  });
+
+  it('shares one in-flight fetch across concurrent initialization calls', async () => {
+    let resolveFetch: ((value: unknown) => void) | undefined;
+    const fetchPromise = new Promise((resolve) => {
+      resolveFetch = resolve;
+    });
+    const fetchMock = vi.fn(() => fetchPromise);
+    vi.stubGlobal('fetch', fetchMock);
+
+    const first = initSpriteResolver();
+    const second = initSpriteResolver();
+    resolveFetch?.({ ok: true, status: 200, json: () => Promise.resolve(FLAT_SPRITE_MAP) });
+    await Promise.all([first, second]);
+
+    expect(fetchMock).toHaveBeenCalledOnce();
+    expect(howlerState.instances).toHaveLength(2);
+  });
+
+  it('does not resurrect resolver state when disposed during initialization', async () => {
+    let resolveFetch: ((value: unknown) => void) | undefined;
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(
+        () =>
+          new Promise((resolve) => {
+            resolveFetch = resolve;
+          }),
+      ),
+    );
+    const initializing = initSpriteResolver();
+    disposeSpriteResolver();
+    resolveFetch?.({ ok: true, status: 200, json: () => Promise.resolve(FLAT_SPRITE_MAP) });
+    await initializing;
+    expect(_getCueMap()).toEqual({});
+    expect(howlerState.unloadCalled).toBe(true);
+  });
+
+  it('rejects different options after initialization instead of silently ignoring them', async () => {
+    mockFetchWith(FLAT_SPRITE_MAP);
+    await initSpriteResolver();
+    await expect(initSpriteResolver({ audioBaseUrl: '/other' })).rejects.toThrow(/dispose/);
+  });
+
+  it('strict mode rejects malformed maps and remains retryable', async () => {
+    mockFetchWith({ broken: { start_ms: 10, end_ms: 5, file: '' } });
+    await expect(initSpriteResolver({ strict: true })).rejects.toThrow(/Invalid sprite map/);
+    mockFetchWith(FLAT_SPRITE_MAP);
+    await expect(initSpriteResolver({ strict: true })).resolves.toBeUndefined();
+  });
+
+  it('validates resolver options before fetching', async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal('fetch', fetchMock);
+    await expect(initSpriteResolver({ formats: [] })).rejects.toThrow(/formats/);
+    await expect(initSpriteResolver({ spriteMapUrl: '' })).rejects.toThrow(/spriteMapUrl/);
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 
   it('gracefully handles missing sprite-map.json (resolves, no cues)', async () => {
@@ -320,6 +385,33 @@ describe('bus volume and mute', () => {
   it('setResolverVolume clamps values outside [0,1]', () => {
     expect(() => setResolverVolume('sfx', 1.5)).not.toThrow();
     expect(() => setResolverVolume('sfx', -0.5)).not.toThrow();
+  });
+
+  it('updates the volume of sounds that are already playing', () => {
+    const id = playCue('drawer-open', 'sfx');
+    setResolverVolume('sfx', 0.25);
+    expect(howlerState.volumeArgs.at(-1)).toEqual([0.25, id]);
+    setResolverMute('sfx', true);
+    expect(howlerState.volumeArgs.at(-1)).toEqual([0, id]);
+  });
+
+  it('removes active-sound tracking and sibling listeners when playback ends', () => {
+    const id = playCue('drawer-open', 'sfx');
+    const instance = howlerState.instances[0];
+    const endRegistration = instance?.once.mock.calls.find(([event]) => event === 'end');
+    const cleanup = endRegistration?.[1] as (() => void) | undefined;
+    expect(cleanup).toBeTypeOf('function');
+    cleanup?.();
+    const volumeCallsAfterCleanup = howlerState.volumeArgs.length;
+    setResolverVolume('sfx', 0.4);
+    expect(howlerState.volumeArgs).toHaveLength(volumeCallsAfterCleanup);
+    expect(instance?.off).toHaveBeenCalledWith('end', cleanup, id);
+    expect(instance?.off).toHaveBeenCalledWith('stop', cleanup, id);
+    expect(instance?.off).toHaveBeenCalledWith('playerror', cleanup, id);
+  });
+
+  it('rejects non-finite volume values', () => {
+    expect(() => setResolverVolume('sfx', Number.NaN)).toThrow(/finite/);
   });
 
   it('muted sfx bus causes zero volume on play', () => {

@@ -37,7 +37,44 @@ export type AudioBuses<B extends string> = Record<B, Bus> & { limiter: Tone.Limi
 
 let _buses: AudioBuses<string> | null = null;
 let _masterName: string | null = null;
+let _busNames: readonly string[] = [];
 const _configuredVolumes = new Map<string, number>();
+const _muteReasons = new Map<string, Set<string>>();
+const _duckStates = new Map<
+  string,
+  { factor: number; timer: ReturnType<typeof setTimeout> | null }
+>();
+
+const MANUAL_MUTE_REASON = 'manual';
+
+function assertFinite(value: number, label: string): void {
+  if (!Number.isFinite(value)) throw new TypeError(`${label} must be a finite number`);
+}
+
+function validateBusNames(names: readonly string[]): void {
+  if (names.length === 0) {
+    throw new Error('buildBuses() requires at least one bus name (the first is the master bus)');
+  }
+  const seen = new Set<string>();
+  for (const name of names) {
+    if (typeof name !== 'string') throw new TypeError('Audio bus names must be strings');
+    if (name.trim().length === 0) throw new Error('Audio bus names must not be empty');
+    if (name === 'limiter') throw new Error('"limiter" is reserved for the output limiter node');
+    if (seen.has(name)) throw new Error(`Duplicate audio bus name: ${name}`);
+    seen.add(name);
+  }
+}
+
+function applyEffectiveGain(bus: string, rampSeconds: number): void {
+  const current = _buses?.[bus];
+  if (!current) return;
+  const muted = (_muteReasons.get(bus)?.size ?? 0) > 0;
+  current.muted = muted;
+  const duckFactor = _duckStates.get(bus)?.factor ?? 1;
+  const value = muted ? 0 : (_configuredVolumes.get(bus) ?? 1) * duckFactor;
+  if (rampSeconds > 0) current.gain.gain.rampTo(value, rampSeconds);
+  else current.gain.gain.setValueAtTime(value, Tone.now());
+}
 
 /**
  * Build and wire a Tone.js bus topology from a list of bus names.
@@ -49,18 +86,25 @@ const _configuredVolumes = new Map<string, number>();
  * Idempotent — returns existing buses if already built.
  */
 export function buildBuses<B extends string>(names: readonly B[]): AudioBuses<B> {
-  if (_buses) return _buses as AudioBuses<B>;
-  if (names.length === 0) {
-    throw new Error('buildBuses() requires at least one bus name (the first is the master bus)');
+  validateBusNames(names);
+  if (_buses) {
+    if (
+      names.length !== _busNames.length ||
+      names.some((name, index) => name !== _busNames[index])
+    ) {
+      throw new Error(
+        `Audio buses are already built as [${_busNames.join(', ')}]; disposeBuses() before building a different topology`,
+      );
+    }
+    return _buses as AudioBuses<B>;
   }
 
   const [masterName, ...subNames] = names as [B, ...B[]];
   const limiter = new Tone.Limiter(-1).toDestination();
   const masterGain = new Tone.Gain(1).connect(limiter);
 
-  const busMap: Record<string, Bus> = {
-    [masterName]: { gain: masterGain, muted: false },
-  };
+  const busMap = Object.create(null) as Record<string, Bus>;
+  busMap[masterName] = { gain: masterGain, muted: false };
   _configuredVolumes.set(masterName, 1);
 
   for (const name of subNames) {
@@ -72,6 +116,7 @@ export function buildBuses<B extends string>(names: readonly B[]): AudioBuses<B>
   const typedBuses = { ...busMap, limiter } as AudioBuses<B>;
   _buses = typedBuses;
   _masterName = masterName;
+  _busNames = [...names];
   return typedBuses;
 }
 
@@ -93,14 +138,12 @@ export function setBusVolume<B extends string>(bus: B, linear: number, rampMs = 
   if (!_buses) return;
   const b = _buses[bus];
   if (!b) return;
+  assertFinite(linear, 'linear');
+  assertFinite(rampMs, 'rampMs');
+  if (rampMs < 0) throw new RangeError('rampMs must be greater than or equal to 0');
   const clamped = Math.max(0, Math.min(1, linear));
   _configuredVolumes.set(bus, clamped);
-  if (b.muted) return;
-  if (rampMs > 0) {
-    b.gain.gain.rampTo(clamped, rampMs / 1000);
-  } else {
-    b.gain.gain.setValueAtTime(clamped, Tone.now());
-  }
+  applyEffectiveGain(bus, rampMs / 1000);
 }
 
 /**
@@ -108,11 +151,21 @@ export function setBusVolume<B extends string>(bus: B, linear: number, rampMs = 
  * Ramps to 0 / restores to stored level over 30ms to avoid clicks.
  */
 export function muteBus<B extends string>(bus: B, mute: boolean): void {
+  _setBusMuteReason(bus, MANUAL_MUTE_REASON, mute);
+}
+
+/** @internal Apply an independently reversible mute layer. */
+export function _setBusMuteReason<B extends string>(bus: B, reason: string, mute: boolean): void {
   if (!_buses) return;
   const b = _buses[bus];
   if (!b) return;
-  b.muted = mute;
-  b.gain.gain.rampTo(mute ? 0 : (_configuredVolumes.get(bus) ?? 1), 0.03);
+  if (reason.length === 0) throw new Error('Mute reason must not be empty');
+  const reasons = _muteReasons.get(bus) ?? new Set<string>();
+  if (mute) reasons.add(reason);
+  else reasons.delete(reason);
+  if (reasons.size > 0) _muteReasons.set(bus, reasons);
+  else _muteReasons.delete(bus);
+  applyEffectiveGain(bus, 0.03);
 }
 
 /**
@@ -124,16 +177,25 @@ export function duckBus<B extends string>(bus: B, duckDb: number, durationMs?: n
   if (!_buses) return;
   const b = _buses[bus];
   if (!b || b.muted) return;
-  const current = b.gain.gain.value;
-  const ducked = current * Tone.dbToGain(duckDb);
-  b.gain.gain.rampTo(ducked, 0.05);
+  assertFinite(duckDb, 'duckDb');
+  if (duckDb > 0) throw new RangeError('duckDb must be 0 or negative');
   if (durationMs !== undefined) {
-    setTimeout(() => {
-      if (!_buses) return;
-      const bb = _buses[bus];
-      if (bb && !bb.muted) {
-        bb.gain.gain.rampTo(_configuredVolumes.get(bus) ?? current, 0.1);
-      }
+    assertFinite(durationMs, 'durationMs');
+    if (durationMs < 0) throw new RangeError('durationMs must be greater than or equal to 0');
+  }
+  const previous = _duckStates.get(bus);
+  if (previous?.timer) clearTimeout(previous.timer);
+  const state = {
+    factor: Tone.dbToGain(duckDb),
+    timer: null as ReturnType<typeof setTimeout> | null,
+  };
+  _duckStates.set(bus, state);
+  applyEffectiveGain(bus, 0.05);
+  if (durationMs !== undefined) {
+    state.timer = setTimeout(() => {
+      if (_duckStates.get(bus) !== state) return;
+      _duckStates.delete(bus);
+      applyEffectiveGain(bus, 0.1);
     }, durationMs);
   }
 }
@@ -143,6 +205,9 @@ export function duckBus<B extends string>(bus: B, duckDb: number, durationMs?: n
  */
 export function disposeBuses(): void {
   if (!_buses) return;
+  for (const state of _duckStates.values()) {
+    if (state.timer) clearTimeout(state.timer);
+  }
   for (const [name, bus] of Object.entries(_buses)) {
     if (name === 'limiter') continue;
     (bus as Bus).gain.dispose();
@@ -150,7 +215,10 @@ export function disposeBuses(): void {
   _buses.limiter.dispose();
   _buses = null;
   _masterName = null;
+  _busNames = [];
   _configuredVolumes.clear();
+  _muteReasons.clear();
+  _duckStates.clear();
 }
 
 /** Exposed for testing / introspection. */

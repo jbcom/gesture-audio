@@ -230,14 +230,13 @@ describe('verifySprites — structural checks (no audio decode required)', () =>
     rmSync(join(root, 'budget-bus'), { recursive: true, force: true });
   });
 
-  it('warns (not fails) when a sprite bus directory does not exist', async () => {
+  it('fails when a required sprite bus directory does not exist', async () => {
     const result = await verifySprites({
       audioRoot: root,
       spriteBuses: ['missing-bus-dir'],
       fast: true,
     });
-    expect(result.failures).toBe(0);
-    expect(result.warnings).toBeGreaterThan(0);
+    expect(result.failures).toBeGreaterThan(0);
     expect(result.lines.some((l) => l.includes('Bus dir missing: missing-bus-dir/'))).toBe(true);
   });
 
@@ -374,6 +373,32 @@ describe('verifySprites — structural checks (no audio decode required)', () =>
 
     expect(result.failures).toBeGreaterThan(0);
     expect(result.lines.some((l) => l.includes('invalid offset/duration'))).toBe(true);
+  });
+
+  it('fails when sprite offsets are non-numeric or non-finite', async () => {
+    const busDir = join(root, 'invalid-entry-bus');
+    mkdirSync(busDir, { recursive: true });
+    writeFileSync(
+      join(busDir, 'sprite.json'),
+      JSON.stringify({ src: ['sprite.webm'], sprite: { text: ['0', 100], nan: [0, null] } }),
+    );
+    const result = await verifySprites({
+      audioRoot: root,
+      spriteBuses: ['invalid-entry-bus'],
+      formats: ['webm'],
+      fast: true,
+    });
+    expect(result.failures).toBeGreaterThanOrEqual(2);
+    expect(result.lines.some((line) => line.includes('invalid offset/duration'))).toBe(true);
+  });
+
+  it('rejects path traversal and malformed format configuration', async () => {
+    await expect(
+      verifySprites({ audioRoot: root, spriteBuses: ['../outside'], fast: true }),
+    ).rejects.toThrow(/inside audioRoot/);
+    await expect(
+      verifySprites({ audioRoot: root, spriteBuses: [], formats: ['webm|.*'], fast: true }),
+    ).rejects.toThrow(/formats/);
   });
 
   it('supports custom formats', async () => {
@@ -546,7 +571,20 @@ describe('verifySprites — structural checks (no audio decode required)', () =>
       expect(result.lines.some((l) => l.includes('exceeds') && l.includes('budget'))).toBe(true);
     });
 
-    it('reports zero bytes for a non-existent audio root', async () => {
+    it('counts files in nested directories without following platform-specific Dirent fields', async () => {
+      const nestedDir = join(root, 'budget-bus', 'nested', 'deeper');
+      mkdirSync(nestedDir, { recursive: true });
+      writeFileSync(join(nestedDir, 'large.webm'), 'x'.repeat(2048));
+      const result = await verifySprites({
+        audioRoot: join(root, 'budget-bus'),
+        spriteBuses: [],
+        maxTotalBytes: 1024,
+        fast: true,
+      });
+      expect(result.failures).toBe(1);
+    });
+
+    it('fails for a non-existent audio root', async () => {
       const result = await verifySprites({
         audioRoot: join(root, 'does-not-exist-at-all'),
         spriteBuses: [],
@@ -554,8 +592,8 @@ describe('verifySprites — structural checks (no audio decode required)', () =>
         fast: true,
       });
 
-      expect(result.failures).toBe(0);
-      expect(result.lines.some((l) => l.includes('0.00MB'))).toBe(true);
+      expect(result.failures).toBeGreaterThan(0);
+      expect(result.lines.some((l) => l.includes('Audio root missing'))).toBe(true);
     });
 
     it('is skipped entirely when maxTotalBytes is not supplied', async () => {
@@ -589,6 +627,7 @@ describe('runVerifySpritesCli', () => {
   });
 
   it('logs each result line and does not exit when verification passes', async () => {
+    mkdirSync(join(root, 'cli-passing-bus'), { recursive: true });
     const logSpy = vi.spyOn(console, 'log').mockImplementation(() => undefined);
     const exitSpy = vi.spyOn(process, 'exit').mockImplementation((() => {
       throw new Error('process.exit should not be called on a passing run');

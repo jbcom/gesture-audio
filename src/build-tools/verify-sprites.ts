@@ -24,9 +24,9 @@
  */
 
 import { spawnSync } from 'node:child_process';
-import { existsSync, readdirSync, statSync } from 'node:fs';
+import { existsSync, lstatSync, readdirSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
-import { join } from 'node:path';
+import { isAbsolute, join, normalize, resolve, sep } from 'node:path';
 
 export interface FlatContentGroup {
   /** Sub-directory under the audio root, e.g. 'crowd-bed' or 'music'. */
@@ -116,16 +116,70 @@ function measureLufs(filePath: string): number | null {
 function dirSizeBytes(dir: string): number {
   if (!existsSync(dir)) return 0;
   let total = 0;
-  for (const entry of readdirSync(dir, { withFileTypes: true, recursive: true })) {
-    if (!entry.isFile()) continue;
-    try {
-      const parent = (entry as unknown as { path?: string }).path ?? dir;
-      total += statSync(join(parent, entry.name)).size;
-    } catch {
-      // file vanished between scan and stat — skip
+  const pending = [dir];
+  while (pending.length > 0) {
+    const current = pending.pop();
+    if (!current) continue;
+    for (const entry of readdirSync(current, { withFileTypes: true })) {
+      const path = join(current, entry.name);
+      if (entry.isSymbolicLink()) continue;
+      if (entry.isDirectory()) pending.push(path);
+      else if (entry.isFile()) {
+        try {
+          total += lstatSync(path).size;
+        } catch {
+          // The file vanished between directory scan and stat.
+        }
+      }
     }
   }
   return total;
+}
+
+function validateRelativePath(value: string, label: string): void {
+  const normalized = normalize(value);
+  if (
+    value.trim().length === 0 ||
+    isAbsolute(value) ||
+    normalized === '..' ||
+    normalized.startsWith(`..${sep}`)
+  ) {
+    throw new TypeError(`${label} must be a non-empty path inside audioRoot`);
+  }
+}
+
+function validateOptions(opts: VerifySpritesOptions): void {
+  if (opts.audioRoot.trim().length === 0) throw new TypeError('audioRoot must not be empty');
+  const formats = opts.formats ?? ['webm', 'm4a'];
+  if (formats.length === 0 || formats.some((format) => !/^[a-z0-9]+$/i.test(format))) {
+    throw new TypeError(
+      'formats must contain at least one extension using only letters and digits',
+    );
+  }
+  for (const bus of opts.spriteBuses) validateRelativePath(bus, 'sprite bus');
+  for (const group of opts.flatGroups ?? []) {
+    validateRelativePath(group.dir, 'flat group dir');
+    const groupFormats = group.formats ?? formats;
+    if (groupFormats.length === 0 || groupFormats.some((format) => !/^[a-z0-9]+$/i.test(format))) {
+      throw new TypeError(`formats for flat group "${group.dir}" must use only letters and digits`);
+    }
+    for (const key of group.keys) validateRelativePath(key, `key in flat group "${group.dir}"`);
+  }
+  for (const [value, label] of [
+    [opts.lufsTarget, 'lufsTarget'],
+    [opts.lufsTolerance, 'lufsTolerance'],
+    [opts.maxTotalBytes, 'maxTotalBytes'],
+  ] as const) {
+    if (value !== undefined && !Number.isFinite(value)) {
+      throw new TypeError(`${label} must be a finite number`);
+    }
+  }
+  if (opts.lufsTolerance !== undefined && opts.lufsTolerance < 0) {
+    throw new RangeError('lufsTolerance must be greater than or equal to 0');
+  }
+  if (opts.maxTotalBytes !== undefined && opts.maxTotalBytes < 0) {
+    throw new RangeError('maxTotalBytes must be greater than or equal to 0');
+  }
 }
 
 /**
@@ -133,6 +187,7 @@ function dirSizeBytes(dir: string): number {
  * (never calls process.exit — safe to call from tests or other tooling).
  */
 export async function verifySprites(opts: VerifySpritesOptions): Promise<VerifyResult> {
+  validateOptions(opts);
   const {
     audioRoot,
     spriteBuses,
@@ -146,12 +201,18 @@ export async function verifySprites(opts: VerifySpritesOptions): Promise<VerifyR
 
   const result: VerifyResult = { failures: 0, warnings: 0, lines: [] };
 
+  if (!existsSync(audioRoot)) {
+    fail(result, `Audio root missing: ${resolve(audioRoot)}`);
+    result.lines.push(`\n── Summary: ${result.failures} failure(s), ${result.warnings} warning(s)`);
+    return result;
+  }
+
   // Sprite buses
   result.lines.push('\n── Sprite buses');
   for (const bus of spriteBuses) {
     const busDir = join(audioRoot, bus);
     if (!existsSync(busDir)) {
-      warn(result, `Bus dir missing: ${bus}/`);
+      fail(result, `Bus dir missing: ${bus}/`);
       continue;
     }
 
@@ -168,7 +229,7 @@ export async function verifySprites(opts: VerifySpritesOptions): Promise<VerifyR
       continue;
     }
 
-    let spriteJson: { src?: unknown; sprite?: Record<string, [number, number]> };
+    let spriteJson: { src?: unknown; sprite?: Record<string, unknown> };
     try {
       spriteJson = JSON.parse(await readFile(jsonPath, 'utf8'));
     } catch {
@@ -198,9 +259,17 @@ export async function verifySprites(opts: VerifySpritesOptions): Promise<VerifyR
         fail(result, `${bus}/${key}: sprite entry must be [startMs, durationMs]`);
         continue;
       }
-      const [startMs, durationMs] = entry;
-      if (startMs < 0 || durationMs <= 0) {
+      const [startMs, durationMs] = entry as unknown[];
+      if (
+        typeof startMs !== 'number' ||
+        typeof durationMs !== 'number' ||
+        !Number.isFinite(startMs) ||
+        !Number.isFinite(durationMs) ||
+        startMs < 0 ||
+        durationMs <= 0
+      ) {
         fail(result, `${bus}/${key}: invalid offset/duration [${startMs}, ${durationMs}]`);
+        continue;
       }
       if (totalDurationMs != null && startMs + durationMs > totalDurationMs + 50) {
         fail(
@@ -210,8 +279,8 @@ export async function verifySprites(opts: VerifySpritesOptions): Promise<VerifyR
       }
     }
 
-    const audioFiles = readdirSync(busDir).filter((f) =>
-      new RegExp(`\\.(${formats.join('|')})$`).test(f),
+    const audioFiles = readdirSync(busDir).filter((file) =>
+      formats.some((ext) => file.endsWith(`.${ext}`)),
     );
     const expectedAudio = new Set(formats.map((ext) => `sprite.${ext}`));
     for (const f of audioFiles) {

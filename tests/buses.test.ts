@@ -133,6 +133,17 @@ describe('buildBuses', () => {
     expect(() => buildBuses([])).toThrow();
   });
 
+  it('rejects empty, duplicate, and reserved bus names', () => {
+    expect(() => buildBuses(['master', ''])).toThrow(/must not be empty/);
+    expect(() => buildBuses(['master', 'master'])).toThrow(/Duplicate/);
+    expect(() => buildBuses(['master', 'limiter'])).toThrow(/reserved/);
+  });
+
+  it('rejects a different topology until the existing graph is disposed', () => {
+    buildBuses(BUS_NAMES);
+    expect(() => buildBuses(['root', 'ui'] as const)).toThrow(/disposeBuses/);
+  });
+
   it('supports an arbitrary caller-chosen bus set (not hardcoded names)', () => {
     disposeBuses();
     const buses = buildBuses(['root', 'ambience', 'ui'] as const);
@@ -140,6 +151,13 @@ describe('buildBuses', () => {
     expect(buses.ambience).toBeDefined();
     expect(buses.ui).toBeDefined();
     expect(buses.ambience.gain.connect).toHaveBeenCalled();
+  });
+
+  it('treats prototype-like names as ordinary own bus keys', () => {
+    disposeBuses();
+    const buses = buildBuses(['__proto__', 'constructor'] as const);
+    expect(Object.hasOwn(buses, '__proto__')).toBe(true);
+    expect(Object.hasOwn(buses, 'constructor')).toBe(true);
   });
 });
 
@@ -173,6 +191,11 @@ describe('setBusVolume', () => {
     setBusVolume('music', -0.5);
     const buses = getBuses<(typeof BUS_NAMES)[number]>();
     expect(buses.music.gain.gain.value).toBe(0);
+  });
+
+  it('rejects non-finite values and negative ramps', () => {
+    expect(() => setBusVolume('music', Number.NaN)).toThrow(/finite/);
+    expect(() => setBusVolume('music', 0.5, -1)).toThrow(/rampMs/);
   });
 
   it('instant set when rampMs=0 uses setValueAtTime', () => {
@@ -286,6 +309,41 @@ describe('duckBus', () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+
+  it('keeps a changed configured volume attenuated until ducking ends', () => {
+    vi.useFakeTimers();
+    try {
+      duckBus('music', -6, 200);
+      setBusVolume('music', 0.4, 0);
+      const buses = getBuses<(typeof BUS_NAMES)[number]>();
+      expect(buses.music.gain.gain.value).toBeLessThan(0.4);
+      vi.advanceTimersByTime(200);
+      expect(buses.music.gain.gain.value).toBeCloseTo(0.4);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('replaces an earlier timed duck instead of allowing a stale restore', () => {
+    vi.useFakeTimers();
+    try {
+      duckBus('music', -6, 100);
+      vi.advanceTimersByTime(50);
+      duckBus('music', -12, 200);
+      vi.advanceTimersByTime(50);
+      const buses = getBuses<(typeof BUS_NAMES)[number]>();
+      expect(buses.music.gain.gain.value).toBeLessThan(0.5);
+      vi.advanceTimersByTime(150);
+      expect(buses.music.gain.gain.value).toBeCloseTo(1);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('rejects amplification and invalid durations', () => {
+    expect(() => duckBus('music', 3)).toThrow(/duckDb/);
+    expect(() => duckBus('music', -6, -1)).toThrow(/durationMs/);
   });
 
   it('does not restore a bus that was muted before the restore timer fires', () => {

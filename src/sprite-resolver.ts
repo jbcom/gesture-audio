@@ -59,6 +59,8 @@ export interface SpriteResolverOptions {
    * Default: '/audio'
    */
   audioBaseUrl?: string;
+  /** Throw on fetch or validation failures instead of degrading to an empty resolver. */
+  strict?: boolean;
 }
 
 const DEFAULT_SPRITE_MAP_URL = '/audio/sprite-map.json';
@@ -70,6 +72,7 @@ const DEFAULT_AUDIO_BASE_URL = '/audio';
  * One Howl per sprite sheet (shared across all cues in that sheet).
  */
 const _howls = new Map<string, Howl>();
+const _activeSounds = new Map<number, { howl: Howl; bus: string }>();
 
 /** Flat cue → entry map populated on init */
 let _cueMap: SpriteMap = {};
@@ -77,46 +80,80 @@ let _cueMap: SpriteMap = {};
 /** Whether init completed (even if no sprite-map found) */
 let _ready = false;
 
-/** Per-bus volume overrides (0–1 linear), applied to new plays. Buses register lazily. */
+/** Per-bus volume overrides (0–1 linear), applied to active and future plays. */
 const _busVolumes = new Map<string, number>();
 
-/** Per-bus mute flags. Buses register lazily. */
-const _busMuted = new Map<string, boolean>();
+/** Independently reversible per-bus mute layers. Buses register lazily. */
+const _muteReasons = new Map<string, Set<string>>();
 
 /** Name of the bus treated as the "master" override — mutes/scales everything. */
 let _masterBus: string | null = null;
+let _initPromise: Promise<void> | null = null;
+let _generation = 0;
+
+const MANUAL_MUTE_REASON = 'manual';
 
 function _effectiveVolume(busTarget: string): number {
-  if (_masterBus && _busMuted.get(_masterBus)) return 0;
-  if (_busMuted.get(busTarget)) return 0;
+  if (_masterBus && (_muteReasons.get(_masterBus)?.size ?? 0) > 0) return 0;
+  if ((_muteReasons.get(busTarget)?.size ?? 0) > 0) return 0;
   const masterVol = _masterBus ? (_busVolumes.get(_masterBus) ?? 1) : 1;
   const busVol = _busVolumes.get(busTarget) ?? 1;
   return masterVol * busVol;
+}
+
+function isSpriteEntry(value: unknown): value is SpriteEntry {
+  if (!value || typeof value !== 'object') return false;
+  const entry = value as Partial<SpriteEntry>;
+  return (
+    Number.isFinite(entry.start_ms) &&
+    Number.isFinite(entry.end_ms) &&
+    (entry.start_ms ?? -1) >= 0 &&
+    (entry.end_ms ?? 0) > (entry.start_ms ?? 0) &&
+    typeof entry.file === 'string' &&
+    entry.file.trim().length > 0
+  );
 }
 
 /**
  * Load and flatten a sprite-map response into a flat SpriteMap.
  * Handles both flat {cueName: entry} and nested {spriteFile: {cueName: entry}}.
  */
-function _flattenMap(raw: unknown): SpriteMap {
-  if (typeof raw !== 'object' || raw === null) return {};
+function _flattenMap(raw: unknown): { map: SpriteMap; warnings: string[] } {
+  if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) {
+    return { map: {}, warnings: ['sprite map must be a JSON object'] };
+  }
   const obj = raw as Record<string, unknown>;
+  const flat: SpriteMap = {};
+  const warnings: string[] = [];
+  const topLevelEntries = Object.entries(obj);
+  const flatShape = topLevelEntries.some(([, value]) => isSpriteEntry(value));
 
-  // Detect nested: first value is also an object without start_ms
-  const firstVal = Object.values(obj)[0];
-  if (firstVal !== null && typeof firstVal === 'object' && !('start_ms' in (firstVal as object))) {
-    const flat: SpriteMap = {};
-    for (const entries of Object.values(obj)) {
-      if (typeof entries === 'object' && entries !== null) {
-        for (const [cue, entry] of Object.entries(entries as Record<string, unknown>)) {
-          flat[cue] = entry as SpriteEntry;
-        }
+  const addEntry = (cue: string, value: unknown, context: string): void => {
+    if (cue.trim().length === 0 || !isSpriteEntry(value)) {
+      warnings.push(`${context}: invalid cue entry`);
+      return;
+    }
+    if (flat[cue]) {
+      warnings.push(`${context}: duplicate cue name "${cue}"`);
+      return;
+    }
+    flat[cue] = { ...value };
+  };
+
+  if (flatShape) {
+    for (const [cue, entry] of topLevelEntries) addEntry(cue, entry, cue);
+  } else {
+    for (const [group, entries] of topLevelEntries) {
+      if (!entries || typeof entries !== 'object' || Array.isArray(entries)) {
+        warnings.push(`${group}: expected an object of cue entries`);
+        continue;
+      }
+      for (const [cue, entry] of Object.entries(entries as Record<string, unknown>)) {
+        addEntry(cue, entry, `${group}.${cue}`);
       }
     }
-    return flat;
   }
-
-  return obj as SpriteMap;
+  return { map: flat, warnings };
 }
 
 /**
@@ -124,20 +161,18 @@ function _flattenMap(raw: unknown): SpriteMap {
  */
 function _buildHowlForFile(
   file: string,
-  entries: SpriteEntry[],
-  cueMap: SpriteMap,
+  entries: Array<[string, SpriteEntry]>,
   formats: string[],
   audioBaseUrl: string,
 ): Howl {
   const spriteObj: Record<string, [number, number]> = {};
-  for (const entry of entries) {
-    const cue = Object.entries(cueMap).find(([, e]) => e === entry)?.[0];
-    if (cue) {
-      spriteObj[cue] = [entry.start_ms, entry.end_ms - entry.start_ms];
-    }
+  for (const [cue, entry] of entries) {
+    spriteObj[cue] = [entry.start_ms, entry.end_ms - entry.start_ms];
   }
 
-  const src = formats.map((ext) => `${audioBaseUrl}/${file}.${ext}`);
+  const base = audioBaseUrl.replace(/\/$/, '');
+  const relativeFile = file.replace(/^\/+/, '');
+  const src = formats.map((ext) => `${base}/${relativeFile}.${ext}`);
 
   return new Howl({
     src,
@@ -147,55 +182,109 @@ function _buildHowlForFile(
   });
 }
 
-let _lastOptions: Required<SpriteResolverOptions> = {
+type NormalizedResolverOptions = Required<SpriteResolverOptions>;
+
+let _lastOptions: NormalizedResolverOptions = {
   spriteMapUrl: DEFAULT_SPRITE_MAP_URL,
   formats: DEFAULT_FORMATS,
   audioBaseUrl: DEFAULT_AUDIO_BASE_URL,
+  strict: false,
 };
+
+function normalizeOptions(opts: SpriteResolverOptions): NormalizedResolverOptions {
+  const formats = opts.formats ?? DEFAULT_FORMATS;
+  if (formats.length === 0 || formats.some((format) => !/^[a-z0-9]+$/i.test(format))) {
+    throw new TypeError(
+      'formats must contain at least one extension using only letters and digits',
+    );
+  }
+  const spriteMapUrl = opts.spriteMapUrl ?? DEFAULT_SPRITE_MAP_URL;
+  const audioBaseUrl = opts.audioBaseUrl ?? DEFAULT_AUDIO_BASE_URL;
+  if (spriteMapUrl.trim().length === 0) throw new TypeError('spriteMapUrl must not be empty');
+  if (audioBaseUrl.trim().length === 0) throw new TypeError('audioBaseUrl must not be empty');
+  return { spriteMapUrl, formats: [...formats], audioBaseUrl, strict: opts.strict ?? false };
+}
+
+function optionsEqual(a: NormalizedResolverOptions, b: NormalizedResolverOptions): boolean {
+  return (
+    a.spriteMapUrl === b.spriteMapUrl &&
+    a.audioBaseUrl === b.audioBaseUrl &&
+    a.strict === b.strict &&
+    a.formats.length === b.formats.length &&
+    a.formats.every((format, index) => format === b.formats[index])
+  );
+}
 
 /**
  * Initialise the sprite resolver.
- * Safe to call multiple times — idempotent.
- * Resolves even if the sprite map is absent (warns, no-op on play).
+ * Concurrent calls with the same options share one attempt. Calls with
+ * different options require disposal first.
+ * Resolves even if the sprite map is absent unless `strict` is enabled.
  */
 export async function initSpriteResolver(opts: SpriteResolverOptions = {}): Promise<void> {
-  if (_ready) return;
-
-  const spriteMapUrl = opts.spriteMapUrl ?? DEFAULT_SPRITE_MAP_URL;
-  const formats = opts.formats ?? DEFAULT_FORMATS;
-  const audioBaseUrl = opts.audioBaseUrl ?? DEFAULT_AUDIO_BASE_URL;
-  _lastOptions = { spriteMapUrl, formats, audioBaseUrl };
-
-  try {
-    const res = await fetch(spriteMapUrl);
-    if (!res.ok) {
-      console.warn(
-        `[gesture-audio/sprite-resolver] sprite map not found (${res.status}) — audio cues disabled`,
-      );
-      _ready = true;
-      return;
-    }
-    const raw: unknown = await res.json();
-    _cueMap = _flattenMap(raw);
-
-    // Group entries by file and build one Howl per file
-    const byFile = new Map<string, SpriteEntry[]>();
-    for (const entry of Object.values(_cueMap)) {
-      const list = byFile.get(entry.file) ?? [];
-      list.push(entry);
-      byFile.set(entry.file, list);
-    }
-    for (const [file, entries] of byFile) {
-      _howls.set(file, _buildHowlForFile(file, entries, _cueMap, formats, audioBaseUrl));
-    }
-  } catch (err) {
-    console.warn(
-      '[gesture-audio/sprite-resolver] Failed to load sprite map — audio cues disabled',
-      err,
+  const normalized = normalizeOptions(opts);
+  if ((_ready || _initPromise) && !optionsEqual(normalized, _lastOptions)) {
+    throw new Error(
+      'Sprite resolver is already initialized with different options; dispose it first',
     );
   }
+  if (_ready) return;
+  if (_initPromise) return _initPromise;
+  _lastOptions = normalized;
+  const generation = _generation;
 
-  _ready = true;
+  const attempt = (async () => {
+    const createdHowls = new Map<string, Howl>();
+    try {
+      const res = await fetch(normalized.spriteMapUrl);
+      if (!res.ok) {
+        throw new Error(`sprite map request failed with HTTP ${res.status}`);
+      }
+      const raw: unknown = await res.json();
+      const parsed = _flattenMap(raw);
+      if (parsed.warnings.length > 0) {
+        const message = `Invalid sprite map: ${parsed.warnings.join('; ')}`;
+        if (normalized.strict) throw new Error(message);
+        console.warn(`[gesture-audio/sprite-resolver] ${message}`);
+      }
+      // Group entries by file and build one Howl per file
+      const byFile = new Map<string, Array<[string, SpriteEntry]>>();
+      for (const [cue, entry] of Object.entries(parsed.map)) {
+        const list = byFile.get(entry.file) ?? [];
+        list.push([cue, entry]);
+        byFile.set(entry.file, list);
+      }
+      for (const [file, entries] of byFile) {
+        createdHowls.set(
+          file,
+          _buildHowlForFile(file, entries, normalized.formats, normalized.audioBaseUrl),
+        );
+      }
+      if (generation !== _generation) {
+        for (const howl of createdHowls.values()) howl.unload();
+        return;
+      }
+      _cueMap = parsed.map;
+      for (const [file, howl] of createdHowls) _howls.set(file, howl);
+      _ready = true;
+    } catch (err) {
+      for (const howl of createdHowls.values()) howl.unload();
+      if (generation !== _generation) return;
+      _cueMap = {};
+      if (normalized.strict) throw err;
+      console.warn(
+        '[gesture-audio/sprite-resolver] Failed to load sprite map — audio cues disabled',
+        err,
+      );
+      _ready = true;
+    }
+  })();
+  _initPromise = attempt;
+  try {
+    await attempt;
+  } finally {
+    if (_initPromise === attempt) _initPromise = null;
+  }
 }
 
 /**
@@ -222,6 +311,16 @@ export function playCue(cueName: string, busTarget = 'sfx'): number {
   const vol = _effectiveVolume(busTarget);
   const id = howl.play(cueName);
   howl.volume(vol, id);
+  _activeSounds.set(id, { howl, bus: busTarget });
+  const cleanup = (): void => {
+    _activeSounds.delete(id);
+    howl.off('end', cleanup, id);
+    howl.off('stop', cleanup, id);
+    howl.off('playerror', cleanup, id);
+  };
+  howl.once('end', cleanup, id);
+  howl.once('stop', cleanup, id);
+  howl.once('playerror', cleanup, id);
   return id;
 }
 
@@ -230,14 +329,15 @@ export function playCue(cueName: string, busTarget = 'sfx'): number {
  */
 export function stopCue(id: number): void {
   if (id < 0) return;
-  for (const howl of _howls.values()) {
-    howl.stop(id);
-  }
+  const active = _activeSounds.get(id);
+  if (!active) return;
+  active.howl.stop(id);
+  _activeSounds.delete(id);
 }
 
 /**
  * Set volume for a named bus (0–1 linear).
- * Affects subsequent playCue calls; does not retroactively adjust active sounds.
+ * Affects active sounds and subsequent playCue calls.
  *
  * The first bus name ever passed to setResolverVolume/setResolverMute is NOT
  * automatically treated as master — call `setResolverMasterBus(name)` once
@@ -245,14 +345,28 @@ export function stopCue(id: number): void {
  * setAndPersistBusVolume/applyPersistedAudioPrefs in preferences-bridge.ts do).
  */
 export function setResolverVolume(bus: string, linear: number): void {
+  if (bus.trim().length === 0) throw new Error('Bus name must not be empty');
+  if (!Number.isFinite(linear)) throw new TypeError('linear must be a finite number');
   _busVolumes.set(bus, Math.max(0, Math.min(1, linear)));
+  _refreshActiveSounds();
 }
 
 /**
  * Mute / unmute a named bus.
  */
 export function setResolverMute(bus: string, muted: boolean): void {
-  _busMuted.set(bus, muted);
+  _setResolverMuteReason(bus, MANUAL_MUTE_REASON, muted);
+}
+
+/** @internal Apply an independently reversible mute layer. */
+export function _setResolverMuteReason(bus: string, reason: string, muted: boolean): void {
+  if (reason.length === 0) throw new Error('Mute reason must not be empty');
+  const reasons = _muteReasons.get(bus) ?? new Set<string>();
+  if (muted) reasons.add(reason);
+  else reasons.delete(reason);
+  if (reasons.size > 0) _muteReasons.set(bus, reasons);
+  else _muteReasons.delete(bus);
+  _refreshActiveSounds();
 }
 
 /**
@@ -261,7 +375,15 @@ export function setResolverMute(bus: string, muted: boolean): void {
  * never called, only per-target-bus mute/volume applies.
  */
 export function setResolverMasterBus(bus: string | null): void {
+  if (bus !== null && bus.trim().length === 0) throw new Error('Master bus must not be empty');
   _masterBus = bus;
+  _refreshActiveSounds();
+}
+
+function _refreshActiveSounds(): void {
+  for (const [id, active] of _activeSounds) {
+    active.howl.volume(_effectiveVolume(active.bus), id);
+  }
 }
 
 /**
@@ -272,19 +394,22 @@ export function disposeSpriteResolver(): void {
     howl.unload();
   }
   _howls.clear();
+  _activeSounds.clear();
   _cueMap = {};
   _busVolumes.clear();
-  _busMuted.clear();
+  _muteReasons.clear();
   _masterBus = null;
   _ready = false;
+  _initPromise = null;
+  _generation += 1;
 }
 
 /** Exposed for testing. */
 export function _getCueMap(): SpriteMap {
-  return { ..._cueMap };
+  return Object.fromEntries(Object.entries(_cueMap).map(([cue, entry]) => [cue, { ...entry }]));
 }
 
 /** Exposed for testing/introspection. */
 export function _getLastResolverOptions(): Required<SpriteResolverOptions> {
-  return _lastOptions;
+  return { ..._lastOptions, formats: [..._lastOptions.formats] };
 }

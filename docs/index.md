@@ -3,7 +3,7 @@ title: gesture-audio
 description: Gesture-gated browser audio that starts reliably, mixes predictably, and keeps application policy local.
 ---
 
-![A fingertip unlocks four audio lanes that converge through a limiter into one waveform.](./assets/gesture-audio-hero.webp)
+![A fingertip unlocks four audio lanes that converge through a limiter into one waveform.](./_og/static.webp)
 
 # Browser audio that starts on purpose
 

@@ -31,6 +31,9 @@ for (const document of documents) {
   for (const match of source.matchAll(/!?(?:\[[^\]]*\])\(([^)]+)\)/g)) {
     const target = match[1]?.trim();
     if (!target || /^(?:https?:|mailto:|#)/.test(target)) continue;
+    // Sourcey copies the configured static social image into this path during
+    // the site build. check-sourcey-output.mjs verifies its generated file.
+    if (document === 'docs/index.md' && target === './_og/static.webp') continue;
     let path;
     try {
       path = decodeURIComponent(target.split('#', 1)[0] ?? '');

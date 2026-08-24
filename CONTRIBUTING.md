@@ -50,6 +50,17 @@ intentional public API break.
 Coverage thresholds are enforced by `pnpm coverage`. Do not add exclusions for
 ordinary error paths; test observable behavior through the public API.
 
+## Documentation site
+
+`docs-site/` is an Astro Starlight site, a pnpm workspace member alongside
+the library. `pnpm verify` builds it (`pnpm docs:build`), so a broken docs
+build fails the same gate as a broken library build. Iterate on it locally
+with `pnpm docs:dev`. It deploys to
+[jonbogaty.com/gesture-audio](https://jonbogaty.com/gesture-audio) on every
+push to `main`. Guide pages under `docs-site/src/content/docs/guides/` mirror
+`docs/*.md` — update both when architecture, releasing, or troubleshooting
+behavior changes.
+
 ## Releases
 
 Releases are automated. Merging a conventional commit to `main` opens a

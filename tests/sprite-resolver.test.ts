@@ -190,6 +190,31 @@ describe('initSpriteResolver', () => {
     expect(opts.formats).toEqual(['webm', 'm4a']);
     expect(opts.audioBaseUrl).toBe('/audio');
   });
+
+  it('treats a primitive sprite-map response as empty', async () => {
+    mockFetchWith('not-an-object');
+    await initSpriteResolver();
+    expect(Object.keys(_getCueMap())).toHaveLength(0);
+  });
+
+  it('treats a null sprite-map response as empty', async () => {
+    mockFetchWith(null);
+    await initSpriteResolver();
+    expect(Object.keys(_getCueMap())).toHaveLength(0);
+  });
+
+  it('skips non-object values when flattening a nested sprite map', async () => {
+    mockFetchWith({
+      'ui/sprite': { 'drawer-open': { start_ms: 0, end_ms: 450, file: 'ui/sprite' } },
+      // A stray primitive value alongside real sprite-file entries must be
+      // skipped rather than throwing while flattening.
+      'not-a-sprite-file': 'unexpected string value',
+    });
+    await initSpriteResolver();
+    const cues = _getCueMap();
+    expect(cues['drawer-open']).toBeDefined();
+    expect(Object.keys(cues)).toHaveLength(1);
+  });
 });
 
 describe('playCue', () => {
@@ -209,8 +234,24 @@ describe('playCue', () => {
     expect(id).toBeGreaterThan(0);
   });
 
+  it('applies full volume by default when no master bus has been designated', () => {
+    playCue('drawer-open', 'sfx');
+    const volCall = howlerState.volumeArgs.at(-1);
+    expect(volCall?.[0]).toBe(1);
+  });
+
   it('returns -1 for unknown cue', () => {
     expect(playCue('nonexistent-cue', 'sfx')).toBe(-1);
+  });
+
+  it('warns and returns -1 when called before initSpriteResolver()', () => {
+    disposeSpriteResolver();
+    const warning = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    expect(playCue('drawer-open', 'sfx')).toBe(-1);
+    expect(warning).toHaveBeenCalledWith(
+      '[gesture-audio/sprite-resolver] resolver not initialised; call initSpriteResolver() first',
+    );
+    warning.mockRestore();
   });
 
   it('calls Howl.play with the cue name', () => {
@@ -313,5 +354,13 @@ describe('bus volume and mute', () => {
     const volCall = howlerState.volumeArgs.at(-1);
     expect(volCall?.[0]).toBeGreaterThan(0);
     setResolverMute('master', false);
+  });
+
+  it('defaults the master bus to full volume when a master bus is designated but no volume was ever set for it', () => {
+    setResolverMasterBus('unconfigured-master');
+    setResolverVolume('sfx', 1);
+    playCue('drawer-open', 'sfx');
+    const volCall = howlerState.volumeArgs.at(-1);
+    expect(volCall?.[0]).toBe(1);
   });
 });

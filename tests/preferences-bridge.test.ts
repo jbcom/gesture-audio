@@ -235,9 +235,34 @@ describe('syncAudioPrefsFromSettings', () => {
       }),
     );
   });
+
+  it('falls back to defaultVolume100 for a bus missing from both the store and the patch', async () => {
+    const store = makeStore(makePrefs({ master: 80 }));
+    const { setBusVolume } = await import('../src/buses');
+    await syncAudioPrefsFromSettings({}, ['master', 'voice'], store, 40);
+    expect(vi.mocked(setBusVolume)).toHaveBeenCalledWith('voice', 0.4);
+  });
 });
 
 describe('registerFocusLossMute', () => {
+  it('stays muted on focus if the store no longer reports muteOnFocusLoss', async () => {
+    const store = makeStore(makePrefs({}, { muteOnFocusLoss: true }));
+    registerFocusLossMute(true, store, BUS_NAMES);
+
+    window.dispatchEvent(new Event('blur'));
+    // Simulate the user disabling the pref while the tab was backgrounded.
+    await store.update({ audioVolumes: (await store.get()).audioVolumes });
+    vi.mocked(store.get).mockResolvedValueOnce(makePrefs({}, { muteOnFocusLoss: false }));
+
+    const { muteBus } = await import('../src/buses');
+    vi.mocked(muteBus).mockClear();
+    window.dispatchEvent(new Event('focus'));
+    await new Promise((r) => setTimeout(r, 10));
+
+    const muteFalseCalls = vi.mocked(muteBus).mock.calls.filter(([, m]) => m === false);
+    expect(muteFalseCalls).toHaveLength(0);
+  });
+
   it('mutes all buses on window blur and restores on focus if still enabled', async () => {
     const store = makeStore(makePrefs({}, { muteOnFocusLoss: true }));
     registerFocusLossMute(true, store, BUS_NAMES);
@@ -263,5 +288,34 @@ describe('registerFocusLossMute', () => {
     vi.mocked(muteBus).mockClear();
     window.dispatchEvent(new Event('blur'));
     expect(muteBus).not.toHaveBeenCalled();
+  });
+
+  it('warns rather than throwing when the store rejects while restoring focus-loss mute', async () => {
+    const warning = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const store: AudioPrefsStore = {
+      get: vi.fn().mockRejectedValue(new Error('store unavailable')),
+      update: vi.fn().mockResolvedValue(undefined),
+    };
+    registerFocusLossMute(true, store, BUS_NAMES);
+
+    window.dispatchEvent(new Event('focus'));
+    await new Promise((r) => setTimeout(r, 10));
+
+    expect(warning).toHaveBeenCalledWith(
+      '[gesture-audio/preferences] Could not restore focus-loss mute state',
+    );
+    warning.mockRestore();
+  });
+
+  it('does nothing when re-enabled while already registered', () => {
+    const store = makeStore(makePrefs({}, { muteOnFocusLoss: true }));
+    registerFocusLossMute(true, store, BUS_NAMES);
+    // Second enable call while already registered must be a no-op — it must
+    // not throw or double-register listeners.
+    expect(() => registerFocusLossMute(true, store, BUS_NAMES)).not.toThrow();
+  });
+
+  it('does nothing when enabled without a store or bus list', () => {
+    expect(() => registerFocusLossMute(true)).not.toThrow();
   });
 });

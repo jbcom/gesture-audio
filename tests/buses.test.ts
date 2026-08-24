@@ -76,7 +76,15 @@ vi.mock('tone', () => {
   };
 });
 
-import { buildBuses, disposeBuses, duckBus, getBuses, muteBus, setBusVolume } from '../src';
+import {
+  _getMasterBusName,
+  buildBuses,
+  disposeBuses,
+  duckBus,
+  getBuses,
+  muteBus,
+  setBusVolume,
+} from '../src';
 
 const BUS_NAMES = ['master', 'music', 'sfx', 'voice', 'crowd'] as const;
 
@@ -176,6 +184,12 @@ describe('setBusVolume', () => {
   it('no-ops for an unknown bus name', () => {
     expect(() => setBusVolume('does-not-exist', 0.5)).not.toThrow();
   });
+
+  it('no-ops when called before buildBuses()', () => {
+    disposeBuses();
+    expect(() => setBusVolume('master', 0.5)).not.toThrow();
+    buildBuses(BUS_NAMES);
+  });
 });
 
 describe('muteBus', () => {
@@ -224,6 +238,16 @@ describe('muteBus', () => {
     muteBus('music', false);
     expect(buses.music.gain.gain.value).toBe(0.65);
   });
+
+  it('no-ops for an unknown bus name', () => {
+    expect(() => muteBus('does-not-exist', true)).not.toThrow();
+  });
+
+  it('no-ops when called before buildBuses()', () => {
+    disposeBuses();
+    expect(() => muteBus('crowd', true)).not.toThrow();
+    buildBuses(BUS_NAMES);
+  });
 });
 
 describe('duckBus', () => {
@@ -246,5 +270,75 @@ describe('duckBus', () => {
     const gainAfterMute = buses.music.gain.gain.value;
     duckBus('music', -6);
     expect(buses.music.gain.gain.value).toBe(gainAfterMute);
+  });
+
+  it('restores the configured level after durationMs elapses', () => {
+    vi.useFakeTimers();
+    try {
+      setBusVolume('music', 0.8, 0);
+      duckBus('music', -6, 200);
+      const buses = getBuses<(typeof BUS_NAMES)[number]>();
+      expect(buses.music.gain.gain.value).toBeLessThan(0.8);
+
+      vi.advanceTimersByTime(200);
+
+      expect(buses.music.gain.gain.value).toBeCloseTo(0.8);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('does not restore a bus that was muted before the restore timer fires', () => {
+    vi.useFakeTimers();
+    try {
+      setBusVolume('music', 0.8, 0);
+      duckBus('music', -6, 200);
+      muteBus('music', true);
+      const buses = getBuses<(typeof BUS_NAMES)[number]>();
+      const mutedValue = buses.music.gain.gain.value;
+
+      vi.advanceTimersByTime(200);
+
+      // Restore is skipped because the bus is muted by the time the timer fires.
+      expect(buses.music.gain.gain.value).toBe(mutedValue);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('is a no-op after disposeBuses() even if a restore timer is still pending', () => {
+    vi.useFakeTimers();
+    try {
+      duckBus('music', -6, 200);
+      disposeBuses();
+      expect(() => vi.advanceTimersByTime(200)).not.toThrow();
+    } finally {
+      vi.useRealTimers();
+      buildBuses(BUS_NAMES);
+    }
+  });
+
+  it('no-ops when called before buildBuses()', () => {
+    disposeBuses();
+    expect(() => duckBus('music', -6)).not.toThrow();
+    buildBuses(BUS_NAMES);
+  });
+});
+
+describe('_getMasterBusName', () => {
+  afterEach(() => {
+    disposeBuses();
+    buildBuses(BUS_NAMES);
+  });
+
+  it('returns the first bus name passed to buildBuses', () => {
+    disposeBuses();
+    buildBuses(BUS_NAMES);
+    expect(_getMasterBusName()).toBe(BUS_NAMES[0]);
+  });
+
+  it('returns null before buildBuses() has been called / after disposeBuses()', () => {
+    disposeBuses();
+    expect(_getMasterBusName()).toBeNull();
   });
 });

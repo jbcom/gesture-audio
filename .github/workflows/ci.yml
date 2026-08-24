@@ -29,7 +29,7 @@ jobs:
           git diff --exit-code pnpm-lock.yaml
       - run: pnpm lint
       - run: pnpm typecheck
-      - run: pnpm test
+      - run: pnpm coverage
       - run: pnpm build
       # A published package whose types or exports are broken is worse than one
       # that fails to build: consumers only find out at integration time.

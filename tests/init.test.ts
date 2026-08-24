@@ -95,6 +95,31 @@ describe('startAudioEngine', () => {
     expect(isAudioEngineStarted()).toBe(true);
   });
 
+  it('does not mark a stale in-flight attempt as started after a reset supersedes it', async () => {
+    const { start } = await import('tone');
+    let release: (() => void) | undefined;
+    vi.mocked(start).mockImplementationOnce(
+      () =>
+        new Promise<void>((resolve) => {
+          release = resolve;
+        }),
+    );
+    const bootstrap = vi.fn().mockResolvedValue(undefined);
+    const attempt = startAudioEngine(bootstrap);
+
+    // Reset bumps the generation counter while the attempt above is still
+    // in-flight (Tone.start() has not resolved yet).
+    _resetAudioEngine();
+    vi.mocked(start).mockReset().mockResolvedValue(undefined);
+
+    release?.();
+    await attempt;
+
+    // The superseded attempt's generation no longer matches, so it must not
+    // have flipped `_started` to true.
+    expect(isAudioEngineStarted()).toBe(false);
+  });
+
   it('shares one in-flight unlock across concurrent callers', async () => {
     const { start } = await import('tone');
     let release: (() => void) | undefined;

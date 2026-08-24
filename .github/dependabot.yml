@@ -1,0 +1,51 @@
+version: 2
+
+updates:
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    # Cooldown holds brand-new releases back a week — supply-chain
+    # compromises are usually caught within the first days of a release.
+    # Security updates bypass cooldown, so CVE fixes are not delayed.
+    cooldown:
+      default-days: 7
+      semver-major-days: 14
+    commit-message:
+      prefix: "ci"
+    groups:
+      github-actions-non-major:
+        update-types: ["minor", "patch"]
+      github-actions-major:
+        update-types: ["major"]
+
+  - package-ecosystem: "npm"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    cooldown:
+      default-days: 7
+      semver-major-days: 14
+    commit-message:
+      prefix: "deps"
+    groups:
+      npm-non-major:
+        update-types: ["minor", "patch"]
+      npm-major:
+        update-types: ["major"]
+
+  - package-ecosystem: "npm"
+    directory: "/"
+    schedule:
+      interval: "daily"
+    cooldown:
+      default-days: 7
+    open-pull-requests-limit: 10
+    commit-message:
+      prefix: "security"
+    labels:
+      - "security"
+    groups:
+      npm-security-updates:
+        applies-to: security-updates
+        patterns: ["*"]

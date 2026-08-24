@@ -26,7 +26,7 @@ resolver, which is useful when audio is optional.
 ## Verify assets in build tooling
 
 ```ts
-import { runVerifySpritesCli } from '@jbdevprimary/gesture-audio/build-tools';
+import { runVerifySpritesCli } from 'gesture-audio/build-tools';
 
 await runVerifySpritesCli({
   audioRoot: 'public/audio',

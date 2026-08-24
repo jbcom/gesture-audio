@@ -355,7 +355,7 @@ export async function verifySprites(opts: VerifySpritesOptions): Promise<VerifyR
  * any failure — intended for a game's own `tsx` build-tools script that
  * supplies its own manifest, e.g.:
  *
- *   import { runVerifySpritesCli } from '@jbdevprimary/gesture-audio/build-tools';
+ *   import { runVerifySpritesCli } from 'gesture-audio/build-tools';
  *   await runVerifySpritesCli({
  *     audioRoot: 'public/audio',
  *     spriteBuses: ['ui', 'impact', 'whoosh'],

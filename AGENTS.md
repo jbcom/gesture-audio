@@ -7,7 +7,7 @@ domain: technical
 
 # gesture-audio Agent Guide
 
-`@jbdevprimary/gesture-audio` is a gesture-gated Tone.js bus graph + Howler
+`gesture-audio` is a gesture-gated Tone.js bus graph + Howler
 sprite resolver + preferences bridge for browser audio. It solves one
 specific problem: browsers refuse to resume a `Web Audio` context until a
 person interacts with the page, and a partial unlock (context resumes while
@@ -39,7 +39,7 @@ mise is a local-only convenience, not a CI dependency.
 - `src/index.ts` is the only supported runtime import path; it re-exports the
   full public API from `buses.ts`, `init.ts`, `preferences-bridge.ts`, and
   `sprite-resolver.ts`. `src/build-tools/index.ts` is a **separate** entry
-  point (`@jbdevprimary/gesture-audio/build-tools`) so Node-only filesystem
+  point (`gesture-audio/build-tools`) so Node-only filesystem
   code never enters a browser bundle — never re-export it from the runtime
   entry point.
 

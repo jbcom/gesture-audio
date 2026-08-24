@@ -3,8 +3,8 @@ title: API reference
 description: Public entry points and behavioral contracts for gesture-audio.
 ---
 
-The browser-safe runtime is imported from `@jbdevprimary/gesture-audio`. Node
-filesystem and process code is isolated in `@jbdevprimary/gesture-audio/build-tools`.
+The browser-safe runtime is imported from `gesture-audio`. Node filesystem and
+process code is isolated in `gesture-audio/build-tools`.
 
 | Area | Public exports |
 | --- | --- |

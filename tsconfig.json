@@ -17,8 +17,8 @@
     "noUnusedParameters": true,
     "forceConsistentCasingInFileNames": true,
     "paths": {
-      "@jbdevprimary/gesture-audio": ["./src/index.ts"],
-      "@jbdevprimary/gesture-audio/build-tools": ["./src/build-tools/index.ts"]
+      "gesture-audio": ["./src/index.ts"],
+      "gesture-audio/build-tools": ["./src/build-tools/index.ts"]
     },
     "types": ["node", "vitest/globals"]
   },

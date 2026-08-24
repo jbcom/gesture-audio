@@ -35,7 +35,7 @@ export default defineConfig({
       {
         type: 'link',
         label: 'npm',
-        href: 'https://www.npmjs.com/package/@jbdevprimary/gesture-audio',
+        href: 'https://www.npmjs.com/package/gesture-audio',
       },
     ],
   },

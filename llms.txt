@@ -4,7 +4,7 @@
 > bridge for reliable browser audio. Treats Web Audio unlock and application
 > bootstrap as one concurrent-safe, retryable transaction.
 
-Install: `npm install @jbdevprimary/gesture-audio tone howler` (`tone` and
+Install: `npm install gesture-audio tone howler` (`tone` and
 `howler` are peer dependencies).
 
 ## Read next
@@ -23,7 +23,7 @@ Install: `npm install @jbdevprimary/gesture-audio tone howler` (`tone` and
 
 ## Public API entry points
 
-- `@jbdevprimary/gesture-audio` — the runtime import (browser-safe).
-- `@jbdevprimary/gesture-audio/build-tools` — Node-only asset verification
+- `gesture-audio` — the runtime import (browser-safe).
+- `gesture-audio/build-tools` — Node-only asset verification
   (`verifySprites`, `runVerifySpritesCli`); never imported from the runtime
   entry point.

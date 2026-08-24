@@ -6,6 +6,8 @@ const documents = [
   'CONTRIBUTING.md',
   'SECURITY.md',
   'CHANGELOG.md',
+  'AGENTS.md',
+  'llms.txt',
   'examples/README.md',
   'docs/architecture.md',
   'docs/releasing.md',

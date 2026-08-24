@@ -66,7 +66,8 @@ function validateBusNames(names: readonly string[]): void {
 }
 
 function applyEffectiveGain(bus: string, rampSeconds: number): void {
-  const current = _buses?.[bus];
+  if (!_buses || !Object.hasOwn(_buses, bus)) return;
+  const current = _buses[bus];
   if (!current) return;
   const muted = (_muteReasons.get(bus)?.size ?? 0) > 0;
   current.muted = muted;
@@ -135,7 +136,7 @@ export function getBuses<B extends string>(): AudioBuses<B> {
  * @param rampMs  - optional smooth ramp in ms (default 50ms)
  */
 export function setBusVolume<B extends string>(bus: B, linear: number, rampMs = 50): void {
-  if (!_buses) return;
+  if (!_buses || !Object.hasOwn(_buses, bus)) return;
   const b = _buses[bus];
   if (!b) return;
   assertFinite(linear, 'linear');
@@ -156,7 +157,7 @@ export function muteBus<B extends string>(bus: B, mute: boolean): void {
 
 /** @internal Apply an independently reversible mute layer. */
 export function _setBusMuteReason<B extends string>(bus: B, reason: string, mute: boolean): void {
-  if (!_buses) return;
+  if (!_buses || !Object.hasOwn(_buses, bus)) return;
   const b = _buses[bus];
   if (!b) return;
   if (reason.length === 0) throw new Error('Mute reason must not be empty');
@@ -174,7 +175,7 @@ export function _setBusMuteReason<B extends string>(bus: B, reason: string, mute
  * Used for narration/SFX ducking rules.
  */
 export function duckBus<B extends string>(bus: B, duckDb: number, durationMs?: number): void {
-  if (!_buses) return;
+  if (!_buses || !Object.hasOwn(_buses, bus)) return;
   const b = _buses[bus];
   if (!b || b.muted) return;
   assertFinite(duckDb, 'duckDb');

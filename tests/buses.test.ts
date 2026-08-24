@@ -208,6 +208,14 @@ describe('setBusVolume', () => {
     expect(() => setBusVolume('does-not-exist', 0.5)).not.toThrow();
   });
 
+  it('no-ops for an unregistered name that collides with an inherited Object.prototype member', () => {
+    // The bus map is `{ ...busMap, limiter }` — a plain object literal, so
+    // it inherits from Object.prototype. A name like "toString" or
+    // "constructor" must not resolve to the inherited function.
+    expect(() => setBusVolume('toString', 0.5)).not.toThrow();
+    expect(() => setBusVolume('constructor', 0.5)).not.toThrow();
+  });
+
   it('no-ops when called before buildBuses()', () => {
     disposeBuses();
     expect(() => setBusVolume('master', 0.5)).not.toThrow();

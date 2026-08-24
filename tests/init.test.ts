@@ -227,4 +227,38 @@ describe('registerAudioGestureTrigger', () => {
     await Promise.resolve();
     expect(bootstrap).not.toHaveBeenCalled();
   });
+
+  it('does not let a stale repeated cleanup evict a live registration and attach a duplicate listener', async () => {
+    const addSpy = vi.spyOn(document, 'addEventListener');
+
+    const firstBootstrap = vi.fn().mockResolvedValue(undefined);
+    const staleCleanup = registerAudioGestureTrigger(firstBootstrap);
+    staleCleanup(); // removes first's listeners, clears the registry entry
+
+    const secondBootstrap = vi.fn().mockResolvedValue(undefined);
+    registerAudioGestureTrigger(secondBootstrap); // registry entry: second's handler
+    const addCallsAfterSecond = addSpy.mock.calls.length;
+
+    // A second, stale call to the first cleanup (e.g. an unmounted
+    // component's effect teardown firing twice) must not clear the registry
+    // entry again — second's handler is still live on the DOM. If it does,
+    // the registry looks empty and a third registration below believes none
+    // exists, attaching a second, redundant set of DOM listeners alongside
+    // second's still-live ones.
+    staleCleanup();
+
+    const thirdBootstrap = vi.fn().mockResolvedValue(undefined);
+    registerAudioGestureTrigger(thirdBootstrap);
+
+    // No new addEventListener calls — the third registration must see
+    // second's handler as `existing` and skip attaching its own.
+    expect(addSpy.mock.calls.length).toBe(addCallsAfterSecond);
+
+    document.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    await new Promise((r) => setTimeout(r, 20));
+    expect(isAudioEngineStarted()).toBe(true);
+    expect(secondBootstrap).toHaveBeenCalledTimes(1);
+
+    addSpy.mockRestore();
+  });
 });

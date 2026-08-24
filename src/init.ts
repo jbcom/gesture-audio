@@ -70,7 +70,7 @@ export function registerAudioGestureTrigger(bootstrap: () => void | Promise<void
       for (const event of GESTURE_EVENTS) {
         document.removeEventListener(event, existing, { capture: true });
       }
-      _gestureHandlers.delete(document);
+      if (_gestureHandlers.get(document) === existing) _gestureHandlers.delete(document);
     };
   }
 
@@ -78,7 +78,7 @@ export function registerAudioGestureTrigger(bootstrap: () => void | Promise<void
     for (const ev of GESTURE_EVENTS) {
       document.removeEventListener(ev, handler, { capture: true });
     }
-    _gestureHandlers.delete(document);
+    if (_gestureHandlers.get(document) === handler) _gestureHandlers.delete(document);
   };
 
   const handler = (): void => {

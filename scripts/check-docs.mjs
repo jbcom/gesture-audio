@@ -14,6 +14,7 @@ const documents = [
   'docs/changelog.md',
   'docs/contributing.md',
   'docs/index.md',
+  'docs/integration.md',
   'docs/quick-start.md',
   'docs/releasing.md',
   'docs/security.md',

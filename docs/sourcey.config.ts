@@ -51,7 +51,7 @@ export default defineConfig({
           groups: [
             {
               group: 'Getting Started',
-              pages: ['index', 'quick-start', 'sprite-maps'],
+              pages: ['index', 'quick-start', 'integration', 'sprite-maps'],
             },
             {
               group: 'Reference',

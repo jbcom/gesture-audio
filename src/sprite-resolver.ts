@@ -101,6 +101,21 @@ function _effectiveVolume(busTarget: string): number {
   return masterVol * busVol;
 }
 
+function isSafeSpriteFile(value: string): boolean {
+  // Sprite maps are fetched at runtime. Keep a map entry confined to the
+  // configured audio base rather than allowing it to walk to an unrelated
+  // same-origin endpoint via `../` segments.
+  const relative = value.replace(/^\/+/, '');
+  return (
+    value.trim().length > 0 &&
+    relative.length > 0 &&
+    !value.includes('\\') &&
+    relative
+      .split('/')
+      .every((segment) => segment.length > 0 && segment !== '.' && segment !== '..')
+  );
+}
+
 function isSpriteEntry(value: unknown): value is SpriteEntry {
   if (!value || typeof value !== 'object') return false;
   const entry = value as Partial<SpriteEntry>;
@@ -110,7 +125,7 @@ function isSpriteEntry(value: unknown): value is SpriteEntry {
     (entry.start_ms ?? -1) >= 0 &&
     (entry.end_ms ?? 0) > (entry.start_ms ?? 0) &&
     typeof entry.file === 'string' &&
-    entry.file.trim().length > 0
+    isSafeSpriteFile(entry.file)
   );
 }
 

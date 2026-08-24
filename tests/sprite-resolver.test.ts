@@ -226,6 +226,14 @@ describe('initSpriteResolver', () => {
     await expect(initSpriteResolver({ strict: true })).resolves.toBeUndefined();
   });
 
+  it('rejects sprite files that escape the configured audio base', async () => {
+    mockFetchWith({ escape: { start_ms: 0, end_ms: 100, file: '../private/sprite' } });
+    await expect(initSpriteResolver({ strict: true })).rejects.toThrow(/Invalid sprite map/);
+
+    mockFetchWith({ escape: { start_ms: 0, end_ms: 100, file: 'ui\\sprite' } });
+    await expect(initSpriteResolver({ strict: true })).rejects.toThrow(/Invalid sprite map/);
+  });
+
   it('validates resolver options before fetching', async () => {
     const fetchMock = vi.fn();
     vi.stubGlobal('fetch', fetchMock);

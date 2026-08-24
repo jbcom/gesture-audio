@@ -1,5 +1,5 @@
 {
-  "name": "@jbcom/gesture-audio",
+  "name": "@jbdevprimary/gesture-audio",
   "version": "0.1.2",
   "description": "Gesture-gated Tone.js bus graph + Howler sprite resolver + preferences bridge. Solves browser autoplay unlock.",
   "type": "module",

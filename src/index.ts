@@ -1,5 +1,5 @@
 /**
- * @jbcom/gesture-audio — public API.
+ * @jbdevprimary/gesture-audio — public API.
  *
  * Tone.js owns the bus graph (master → limiter → destination, plus caller-
  * named sub-buses). Howler owns sample playback purely as a sprite-based

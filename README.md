@@ -1,7 +1,7 @@
-# @jbcom/gesture-audio
+# @jbdevprimary/gesture-audio
 
 [![CI](https://github.com/jbcom/gesture-audio/actions/workflows/ci.yml/badge.svg)](https://github.com/jbcom/gesture-audio/actions/workflows/ci.yml)
-[![npm](https://img.shields.io/npm/v/@jbcom/gesture-audio.svg)](https://www.npmjs.com/package/@jbcom/gesture-audio)
+[![npm](https://img.shields.io/npm/v/@jbdevprimary/gesture-audio.svg)](https://www.npmjs.com/package/@jbdevprimary/gesture-audio)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](./LICENSE)
 
 **Browsers refuse to start audio until the user has interacted with the page.**
@@ -24,7 +24,7 @@ mixing policy. Those stay in your app.
 ## Install
 
 ```sh
-npm install @jbcom/gesture-audio tone howler
+npm install @jbdevprimary/gesture-audio tone howler
 ```
 
 `tone` and `howler` are peer dependencies — bring your own pinned versions.
@@ -38,7 +38,7 @@ import {
   initSpriteResolver,
   playCue,
   applyPersistedAudioPrefs,
-} from '@jbcom/gesture-audio';
+} from '@jbdevprimary/gesture-audio';
 
 const BUS_NAMES = ['master', 'music', 'sfx', 'voice', 'crowd'] as const;
 
@@ -100,7 +100,7 @@ apply prefs, defer everything behind a gesture. The rest of the public API:
 ### Bus control (`buses.ts`)
 
 ```ts
-import { getBuses, setBusVolume, muteBus, duckBus, disposeBuses } from '@jbcom/gesture-audio';
+import { getBuses, setBusVolume, muteBus, duckBus, disposeBuses } from '@jbdevprimary/gesture-audio';
 
 // Read the live topology built by buildBuses() — same object every call.
 const buses = getBuses<(typeof BUS_NAMES)[number]>();
@@ -124,7 +124,7 @@ disposeBuses();
 ### Engine lifecycle (`init.ts`)
 
 ```ts
-import { startAudioEngine, isAudioEngineStarted } from '@jbcom/gesture-audio';
+import { startAudioEngine, isAudioEngineStarted } from '@jbdevprimary/gesture-audio';
 
 // Usually you don't call this directly — registerAudioGestureTrigger wires
 // it to the first click/keydown/touchstart. But a "Tap to start" overlay
@@ -143,7 +143,7 @@ if (isAudioEngineStarted()) {
 ### Preferences bridge extras (`preferences-bridge.ts`)
 
 ```ts
-import { setAndPersistBusMute, registerFocusLossMute } from '@jbcom/gesture-audio';
+import { setAndPersistBusMute, registerFocusLossMute } from '@jbdevprimary/gesture-audio';
 
 // Mute a single bus at runtime (e.g. a per-bus mute button). Unlike
 // setAndPersistBusVolume this is NOT persisted to the store — persist it
@@ -166,7 +166,7 @@ import {
   setResolverMute,
   setResolverMasterBus,
   disposeSpriteResolver,
-} from '@jbcom/gesture-audio';
+} from '@jbdevprimary/gesture-audio';
 
 // playCue() returns a Howler sound id you can stop early (e.g. a looping
 // cue interrupted by a state change).
@@ -190,7 +190,7 @@ setResolverMasterBus('master');
 disposeSpriteResolver();
 ```
 
-## `@jbcom/gesture-audio/build-tools`
+## `@jbdevprimary/gesture-audio/build-tools`
 
 A generic CI asset verifier (`verifySprites` / `runVerifySpritesCli`) that
 checks sprite-bus file presence, sprite-map offset/duration sanity, orphan
@@ -198,7 +198,7 @@ files, LUFS loudness targets (via `ffmpeg`/`ffprobe`), and a total byte budget.
 Fully parameterised — no bus or cue names are baked in.
 
 ```ts
-import { runVerifySpritesCli } from '@jbcom/gesture-audio/build-tools';
+import { runVerifySpritesCli } from '@jbdevprimary/gesture-audio/build-tools';
 
 await runVerifySpritesCli({
   audioRoot: 'public/audio',

@@ -1,4 +1,4 @@
-import { runVerifySpritesCli } from '@jbdevprimary/gesture-audio/build-tools';
+import { runVerifySpritesCli } from 'gesture-audio/build-tools';
 
 await runVerifySpritesCli({
   audioRoot: 'public/audio',

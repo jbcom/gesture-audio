@@ -6,7 +6,7 @@ description: Register a gesture trigger, build buses, resolve sprites, and apply
 ## Install
 
 ```sh
-npm install @jbdevprimary/gesture-audio tone howler
+npm install gesture-audio tone howler
 ```
 
 `tone` and `howler` are peer dependencies, so the application chooses their
@@ -22,7 +22,7 @@ import {
   playCue,
   registerAudioGestureTrigger,
   setResolverMasterBus,
-} from '@jbdevprimary/gesture-audio';
+} from 'gesture-audio';
 import { preferences } from './audio-preferences.js';
 
 const buses = ['master', 'music', 'sfx', 'voice'] as const;

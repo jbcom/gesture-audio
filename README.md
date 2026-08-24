@@ -1,9 +1,9 @@
-# @jbdevprimary/gesture-audio
+# gesture-audio
 
 ![A fingertip unlocks four audio lanes that converge through a limiter into one waveform.](https://raw.githubusercontent.com/jbcom/gesture-audio/main/docs/assets/gesture-audio-hero.webp)
 
 [![CI](https://github.com/jbcom/gesture-audio/actions/workflows/ci.yml/badge.svg)](https://github.com/jbcom/gesture-audio/actions/workflows/ci.yml)
-[![npm](https://img.shields.io/npm/v/@jbdevprimary/gesture-audio.svg)](https://www.npmjs.com/package/@jbdevprimary/gesture-audio)
+[![npm](https://img.shields.io/npm/v/gesture-audio.svg)](https://www.npmjs.com/package/gesture-audio)
 [![License: MIT](https://img.shields.io/badge/License-MIT-0b2239.svg)](./LICENSE)
 
 Gesture-gated browser audio that starts reliably, mixes predictably, and keeps
@@ -33,7 +33,7 @@ Node 22 or newer is required for build tooling. The runtime supports modern
 browsers with Web Audio, `fetch`, and the event APIs used by Tone.js and Howler.
 
 ```sh
-npm install @jbdevprimary/gesture-audio tone howler
+npm install gesture-audio tone howler
 ```
 
 `tone` and `howler` are peer dependencies, so the application owns their versions.
@@ -48,7 +48,7 @@ import {
   playCue,
   registerAudioGestureTrigger,
   setResolverMasterBus,
-} from '@jbdevprimary/gesture-audio';
+} from 'gesture-audio';
 // The application owns persistence; implement AudioPrefsStore against your
 // own store. See examples/browser-bootstrap.ts for a full local-storage-
 // backed implementation.
@@ -135,7 +135,7 @@ applying runtime mute behavior.
 | Tone buses | `buildBuses`, `getBuses`, `setBusVolume`, `muteBus`, `duckBus`, `disposeBuses` |
 | Sprites | `initSpriteResolver`, `playCue`, `stopCue`, `setResolverVolume`, `setResolverMute`, `setResolverMasterBus`, `disposeSpriteResolver` |
 | Preferences | `applyPersistedAudioPrefs`, `setAndPersistBusVolume`, `setAndPersistBusMute`, `syncAudioPrefsFromSettings`, `registerFocusLossMute` |
-| Build tools | `verifySprites`, `runVerifySpritesCli` from `@jbdevprimary/gesture-audio/build-tools` |
+| Build tools | `verifySprites`, `runVerifySpritesCli` from `gesture-audio/build-tools` |
 
 Bus gain is linear from `0` to `1`. Preference volume is an integer percentage
 from `0` to `100`. The first bus passed to `buildBuses` is the master/root bus;
@@ -151,7 +151,7 @@ removing the attenuation.
 The build-only entry point uses Node APIs and is kept out of the browser entry:
 
 ```ts
-import { runVerifySpritesCli } from '@jbdevprimary/gesture-audio/build-tools';
+import { runVerifySpritesCli } from 'gesture-audio/build-tools';
 
 await runVerifySpritesCli({
   audioRoot: 'public/audio',

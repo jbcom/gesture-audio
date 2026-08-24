@@ -8,7 +8,7 @@ import {
   registerAudioGestureTrigger,
   setAndPersistBusVolume,
   setResolverMasterBus,
-} from '@jbdevprimary/gesture-audio';
+} from 'gesture-audio';
 
 const BUS_NAMES = ['master', 'music', 'sfx', 'voice'] as const;
 const STORAGE_KEY = 'example-audio-preferences';

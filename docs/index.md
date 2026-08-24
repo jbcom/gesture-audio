@@ -7,7 +7,7 @@ description: Gesture-gated browser audio that starts reliably, mixes predictably
 
 # Browser audio that starts on purpose
 
-`@jbdevprimary/gesture-audio` provides the small, composable infrastructure
+`gesture-audio` provides the small, composable infrastructure
 behind dependable interactive audio. It starts Web Audio only after a real
 gesture, routes continuous Tone.js signals through a caller-named bus graph,
 plays Howler sprites, and applies persisted preferences without owning an

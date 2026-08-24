@@ -23,7 +23,7 @@ scanning check are green and run:
 ```sh
 pnpm install --frozen-lockfile
 pnpm verify
-npm view @jbdevprimary/gesture-audio version
+npm view gesture-audio version
 ```
 
 The final command should match the new tag after the release publishes.

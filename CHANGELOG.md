@@ -4,6 +4,22 @@ Notable changes to this project are recorded here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and releases follow
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.2](https://github.com/jbcom/gesture-audio/compare/v0.2.1...v0.2.2) (2026-08-24)
+
+
+### Bug Fixes
+
+* **ci:** publish releases through CD OIDC ([dfd037a](https://github.com/jbcom/gesture-audio/commit/dfd037a78a1d7a98ecc491e26e86f22c1d8c3f51))
+* **ci:** publish releases through CD OIDC ([fbc6dd8](https://github.com/jbcom/gesture-audio/commit/fbc6dd81027ef97c7647038ae0c412a91bcc32e9))
+* **ci:** recognize release-please app identity ([58179af](https://github.com/jbcom/gesture-audio/commit/58179af4c6d9b52e62ce71a77f0db2a9d0d84838))
+* **ci:** recognize release-please app identity ([e023a6d](https://github.com/jbcom/gesture-audio/commit/e023a6dc11f727e56cf8e0404eea0b50de970f37))
+* **ci:** satisfy repository policy gate ([6d9b0b4](https://github.com/jbcom/gesture-audio/commit/6d9b0b4b201134b2c14480e4418720cce3b3c387))
+* **ci:** satisfy repository policy gate ([d04f495](https://github.com/jbcom/gesture-audio/commit/d04f4955af6c17e97016e9187f698bdbc25bcc4f))
+* **ci:** satisfy required maintenance gates ([37c23c3](https://github.com/jbcom/gesture-audio/commit/37c23c33a3dfb385cc379eaa4db0833ecc6582da))
+* **ci:** satisfy required maintenance gates ([49cf734](https://github.com/jbcom/gesture-audio/commit/49cf734853c5f61098f22a47c356213998f7f659))
+* **release:** use trusted automation token ([0d8f5b3](https://github.com/jbcom/gesture-audio/commit/0d8f5b3ff8afa872e4362f5740d53d8944b0923f))
+* **release:** use trusted automation token ([76020f0](https://github.com/jbcom/gesture-audio/commit/76020f03a92159f09a3ad609afb8bdaaf5b92d64))
+
 ## [0.2.1](https://github.com/jbcom/gesture-audio/compare/v0.2.0...v0.2.1) (2026-08-24)
 
 

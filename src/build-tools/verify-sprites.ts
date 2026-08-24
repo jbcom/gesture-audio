@@ -225,7 +225,10 @@ export async function verifySprites(opts: VerifySpritesOptions): Promise<VerifyR
       if (lufs == null) {
         warn(result, `${bus}: could not measure LUFS`);
       } else if (Math.abs(lufs - lufsTarget) > lufsTolerance) {
-        fail(result, `${bus}: LUFS ${lufs.toFixed(1)} outside target ${lufsTarget} ± ${lufsTolerance}`);
+        fail(
+          result,
+          `${bus}: LUFS ${lufs.toFixed(1)} outside target ${lufsTarget} ± ${lufsTolerance}`,
+        );
       } else {
         pass(result, `${bus}: LUFS ${lufs.toFixed(1)}`);
       }
@@ -283,7 +286,7 @@ export async function verifySprites(opts: VerifySpritesOptions): Promise<VerifyR
  * any failure — intended for a game's own `tsx` build-tools script that
  * supplies its own manifest, e.g.:
  *
- *   import { runVerifySpritesCli } from '@arcade-cabinet/audio-engine/build-tools';
+ *   import { runVerifySpritesCli } from '@jbcom/gesture-audio/build-tools';
  *   await runVerifySpritesCli({
  *     audioRoot: 'public/audio',
  *     spriteBuses: ['ui', 'impact', 'whoosh'],

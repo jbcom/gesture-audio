@@ -13,7 +13,12 @@ vi.mock('tone', () => ({
   start: vi.fn().mockResolvedValue(undefined),
 }));
 
-import { _resetAudioEngine, isAudioEngineStarted, registerAudioGestureTrigger, startAudioEngine } from '../src';
+import {
+  _resetAudioEngine,
+  isAudioEngineStarted,
+  registerAudioGestureTrigger,
+  startAudioEngine,
+} from '../src';
 
 describe('startAudioEngine', () => {
   beforeEach(async () => {
@@ -94,9 +99,10 @@ describe('startAudioEngine', () => {
     const { start } = await import('tone');
     let release: (() => void) | undefined;
     vi.mocked(start).mockImplementationOnce(
-      () => new Promise<void>((resolve) => {
-        release = resolve;
-      }),
+      () =>
+        new Promise<void>((resolve) => {
+          release = resolve;
+        }),
     );
     const bootstrap = vi.fn().mockResolvedValue(undefined);
     const first = startAudioEngine(bootstrap);

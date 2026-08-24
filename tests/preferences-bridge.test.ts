@@ -53,9 +53,9 @@ vi.mock('../src/sprite-resolver', () => {
 });
 
 import {
-  applyPersistedAudioPrefs,
   type AudioPrefsSnapshot,
   type AudioPrefsStore,
+  applyPersistedAudioPrefs,
   registerFocusLossMute,
   setAndPersistBusMute,
   setAndPersistBusVolume,
@@ -244,7 +244,7 @@ describe('registerFocusLossMute', () => {
 
     window.dispatchEvent(new Event('blur'));
     const { muteBus } = await import('../src/buses');
-    let muteTrueCalls = vi.mocked(muteBus).mock.calls.filter(([, m]) => m === true);
+    const muteTrueCalls = vi.mocked(muteBus).mock.calls.filter(([, m]) => m === true);
     expect(muteTrueCalls.length).toBeGreaterThanOrEqual(BUS_NAMES.length);
 
     vi.mocked(muteBus).mockClear();

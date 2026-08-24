@@ -5,7 +5,7 @@
  * `exports.require` resolves unambiguously against the ESM build's .js
  * files living in a sibling directory.
  */
-import { readdir, readFile, rename, writeFile } from 'node:fs/promises';
+import { readdir, readFile, unlink, writeFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -32,16 +32,13 @@ for (const file of jsFiles) {
   let content = await readFile(file, 'utf8');
   // Fix relative require()/exports specifiers that reference sibling .js
   // files emitted by this same pass (now renamed to .cjs).
-  content = content.replace(
-    /require\((["'])(\.\.?\/[^"']+?)\1\)/g,
-    (match, quote, spec) => {
-      if (spec.endsWith('.json')) return match;
-      const withoutJs = spec.endsWith('.js') ? spec.slice(0, -3) : spec;
-      return `require(${quote}${withoutJs}.cjs${quote})`;
-    },
-  );
+  content = content.replace(/require\((["'])(\.\.?\/[^"']+?)\1\)/g, (match, quote, spec) => {
+    if (spec.endsWith('.json')) return match;
+    const withoutJs = spec.endsWith('.js') ? spec.slice(0, -3) : spec;
+    return `require(${quote}${withoutJs}.cjs${quote})`;
+  });
   await writeFile(cjsFile, content, 'utf8');
-  await import('node:fs/promises').then((fs) => fs.unlink(file));
+  await unlink(file);
 }
 
 console.log(`Renamed ${jsFiles.length} CJS output file(s) to .cjs`);

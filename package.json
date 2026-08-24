@@ -1,20 +1,30 @@
 {
-  "name": "@arcade-cabinet/audio-engine",
+  "name": "@jbcom/gesture-audio",
   "version": "0.1.2",
-  "description": "Gesture-gated Tone.js bus graph + Howler sprite resolver + preferences bridge, extracted from on-the-ropes.",
+  "description": "Gesture-gated Tone.js bus graph + Howler sprite resolver + preferences bridge. Solves browser autoplay unlock.",
   "type": "module",
   "license": "MIT",
   "sideEffects": false,
   "exports": {
     ".": {
-      "types": "./dist/types/index.d.ts",
-      "import": "./dist/esm/index.js",
-      "require": "./dist/cjs/index.cjs"
+      "import": {
+        "types": "./dist/types/index.d.ts",
+        "default": "./dist/esm/index.js"
+      },
+      "require": {
+        "types": "./dist/types-cjs/index.d.cts",
+        "default": "./dist/cjs/index.cjs"
+      }
     },
     "./build-tools": {
-      "types": "./dist/types/build-tools/index.d.ts",
-      "import": "./dist/esm/build-tools/index.js",
-      "require": "./dist/cjs/build-tools/index.cjs"
+      "import": {
+        "types": "./dist/types/build-tools/index.d.ts",
+        "default": "./dist/esm/build-tools/index.js"
+      },
+      "require": {
+        "types": "./dist/types-cjs/build-tools/index.d.cts",
+        "default": "./dist/cjs/build-tools/index.cjs"
+      }
     },
     "./package.json": "./package.json"
   },
@@ -25,34 +35,68 @@
     "dist"
   ],
   "scripts": {
-    "build": "pnpm run clean && pnpm run build:esm && pnpm run build:cjs && pnpm run build:types",
+    "build": "pnpm run clean && pnpm run build:esm && pnpm run build:cjs && pnpm run build:types && pnpm run build:types-cjs",
     "build:esm": "tsc -p tsconfig.esm.json",
     "build:cjs": "tsc -p tsconfig.cjs.json && node scripts/rename-cjs.mjs",
     "build:types": "tsc -p tsconfig.types.json",
     "clean": "rimraf dist",
     "test": "vitest run",
-    "typecheck": "tsc -p tsconfig.json --noEmit"
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "verify": "pnpm run lint && pnpm run typecheck && pnpm run test && pnpm run build && pnpm run check:package",
+    "build:types-cjs": "tsc -p tsconfig.types-cjs.json && node scripts/rename-cts.mjs",
+    "check:package": "publint && attw --pack .",
+    "lint": "biome check .",
+    "lint:fix": "biome check --write ."
   },
   "peerDependencies": {
     "howler": "^2.2.4",
     "tone": "^15.0.0"
   },
   "devDependencies": {
+    "@arethetypeswrong/cli": "^0.18.2",
+    "@biomejs/biome": "^2.5.10",
     "@types/howler": "^2.2.12",
     "@types/node": "^22.0.0",
     "howler": "^2.2.4",
     "jsdom": "^29.1.0",
+    "publint": "^0.3.24",
     "rimraf": "^6.0.1",
     "tone": "^15.1.22",
     "typescript": "^6.0.3",
     "vitest": "^4.1.5"
   },
   "publishConfig": {
-    "access": "restricted",
-    "registry": "https://redacted-private-registry.example/api/packages/arcade-cabinet/npm/"
+    "access": "public",
+    "provenance": true
   },
   "repository": {
     "type": "git",
-    "url": "https://redacted-private-registry.example/arcade-cabinet/audio-engine"
+    "url": "git+https://github.com/jbcom/gesture-audio.git"
+  },
+  "bugs": {
+    "url": "https://github.com/jbcom/gesture-audio/issues"
+  },
+  "homepage": "https://github.com/jbcom/gesture-audio#readme",
+  "engines": {
+    "node": ">=22"
+  },
+  "packageManager": "pnpm@11.23.0",
+  "keywords": [
+    "audio",
+    "tone.js",
+    "howler",
+    "autoplay",
+    "web-audio",
+    "gesture",
+    "unlock",
+    "audio-sprite"
+  ],
+  "author": "Jon Bogaty",
+  "typesVersions": {
+    "*": {
+      "build-tools": [
+        "./dist/types/build-tools/index.d.ts"
+      ]
+    }
   }
 }

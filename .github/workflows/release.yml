@@ -27,3 +27,6 @@ jobs:
         with:
           config-file: release-please-config.json
           manifest-file: .release-please-manifest.json
+          # The organization-scoped token is a trusted upstream identity, so
+          # release PR updates trigger the ordinary trusted PR workflows.
+          token: ${{ secrets.CI_GITHUB_TOKEN }}

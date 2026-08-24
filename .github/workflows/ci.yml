@@ -4,6 +4,10 @@ on:
   pull_request:
   push:
     branches: [main]
+  # Lets `gh workflow run ci.yml --ref <branch>` re-fire CI when a transient
+  # infra hiccup (runner queue stall, network blip) leaves a branch without
+  # a fresh run.
+  workflow_dispatch:
 
 permissions:
   contents: read

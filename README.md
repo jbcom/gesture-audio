@@ -3,7 +3,6 @@
 ![A fingertip unlocks four audio lanes that converge through a limiter into one waveform.](./docs/assets/gesture-audio-hero.webp)
 
 [![CI](https://github.com/jbcom/gesture-audio/actions/workflows/ci.yml/badge.svg)](https://github.com/jbcom/gesture-audio/actions/workflows/ci.yml)
-[![CodeQL](https://github.com/jbcom/gesture-audio/actions/workflows/codeql.yml/badge.svg)](https://github.com/jbcom/gesture-audio/actions/workflows/codeql.yml)
 [![npm](https://img.shields.io/npm/v/@jbdevprimary/gesture-audio.svg)](https://www.npmjs.com/package/@jbdevprimary/gesture-audio)
 [![License: MIT](https://img.shields.io/badge/License-MIT-0b2239.svg)](./LICENSE)
 

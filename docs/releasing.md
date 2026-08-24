@@ -15,7 +15,8 @@ that succeeds, configure npm trusted publishing for GitHub repository
 `jbcom/gesture-audio` and workflow `release.yml`, verify an OIDC release, then
 remove the token fallback. Never put tokens in `.npmrc` or repository files.
 
-Before merging a release pull request, confirm CI and CodeQL are green and run:
+Before merging a release pull request, confirm CI and GitHub's default code
+scanning check are green and run:
 
 ```sh
 pnpm install --frozen-lockfile

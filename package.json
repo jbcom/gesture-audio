@@ -37,7 +37,9 @@
     "examples",
     "CHANGELOG.md",
     "CONTRIBUTING.md",
-    "SECURITY.md"
+    "SECURITY.md",
+    "AGENTS.md",
+    "llms.txt"
   ],
   "scripts": {
     "build": "pnpm run clean && pnpm run build:esm && pnpm run build:cjs && pnpm run build:types && pnpm run build:types-cjs",
@@ -48,7 +50,7 @@
     "test": "vitest run",
     "coverage": "vitest run --coverage",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "verify": "pnpm run lint && pnpm run typecheck && pnpm run coverage && pnpm run build && pnpm run check:docs && pnpm run check:imports && pnpm run check:package",
+    "verify": "pnpm run lint && pnpm run typecheck && pnpm run coverage && pnpm run build && pnpm run check:docs && pnpm run check:imports && pnpm run check:package && pnpm run docs:build",
     "build:types-cjs": "tsc -p tsconfig.types-cjs.json && node scripts/rename-cts.mjs",
     "check:package": "publint && attw --pack .",
     "check:docs": "node scripts/check-docs.mjs",
@@ -56,6 +58,8 @@
     "lint": "biome check .",
     "lint:fix": "biome check --write .",
     "test:watch": "vitest",
+    "docs:dev": "pnpm --filter docs-site dev",
+    "docs:build": "pnpm --filter docs-site build",
     "prepack": "pnpm build"
   },
   "peerDependencies": {

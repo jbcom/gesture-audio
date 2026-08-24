@@ -1,0 +1,60 @@
+---
+title: gesture-audio
+description: Gesture-gated browser audio that starts reliably, mixes predictably, and keeps application policy in your application.
+template: splash
+hero:
+  tagline: Gesture-gated browser audio that starts reliably, mixes predictably, and keeps application policy in your application.
+  image:
+    alt: A fingertip unlocks four audio lanes that converge through a limiter into one waveform.
+    file: ../../assets/hero.webp
+  actions:
+    - text: Quick start
+      link: /guides/quick-start/
+      icon: right-arrow
+      variant: primary
+    - text: View on npm
+      link: https://www.npmjs.com/package/@jbdevprimary/gesture-audio
+      icon: external
+      variant: minimal
+---
+
+import { Card, CardGrid } from '@astrojs/starlight/components';
+
+Browsers will not resume a Web Audio context until a person interacts with
+the page. A partial unlock is especially troublesome: the context can resume
+while sample loading or preference hydration fails, leaving an app that
+believes audio is ready when it is not. `gesture-audio` treats unlock and
+bootstrap as one concurrent-safe, retryable transaction.
+
+<CardGrid stagger>
+	<Card title="Typed bus graph" icon="rocket">
+		A caller-named Tone.js bus graph with a master limiter and non-destructive,
+		independently layered mute and timed ducking.
+	</Card>
+	<Card title="Validated sprite resolver" icon="approve-check">
+		A Howler sprite-map resolver whose active sounds follow live mix changes,
+		with actionable warnings for malformed maps.
+	</Card>
+	<Card title="Preferences bridge" icon="setting">
+		Persist volume and mute state to any small async preferences store without
+		owning the persistence framework.
+	</Card>
+	<Card title="Asset verification" icon="magnifier">
+		A Node-only build-tool export checks sprite structure, duration, loudness,
+		orphans, and size before assets ship.
+	</Card>
+</CardGrid>
+
+## Install
+
+Node 22 or newer is required for build tooling. The runtime supports modern
+browsers with Web Audio, `fetch`, and the event APIs used by Tone.js and Howler.
+
+```sh
+npm install @jbdevprimary/gesture-audio tone howler
+```
+
+`tone` and `howler` are peer dependencies, so the application owns their versions.
+
+Continue to the [quick start](/guides/quick-start/) for a complete bootstrap
+example, or jump straight to the [API reference](/reference/).

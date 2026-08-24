@@ -1,0 +1,106 @@
+/*
+ * gesture-audio brand theme — palette sampled directly from
+ * docs/assets/gesture-audio-hero.webp (ink navy, parchment cream, coral
+ * gesture-pulse, teal waveform, gold mixer accent). Fraunces for display
+ * headings echoes the hero's hand-drawn line work; Inter for body text and
+ * UI chrome; JetBrains Mono for code.
+ */
+@import '@fontsource/fraunces/500.css';
+@import '@fontsource/fraunces/600.css';
+@import '@fontsource/inter/400.css';
+@import '@fontsource/inter/500.css';
+@import '@fontsource/inter/600.css';
+@import '@fontsource/jetbrains-mono/400.css';
+@import '@fontsource/jetbrains-mono/500.css';
+
+:root {
+  --ga-navy: #07182b;
+  --ga-navy-soft: #0f2740;
+  --ga-cream: #fbf4e4;
+  --ga-cream-dim: #f2e9d6;
+  --ga-coral: #f08665;
+  --ga-teal: #4d7d7f;
+  --ga-gold: #d4a24a;
+
+  --sl-font: 'Inter', system-ui, sans-serif;
+  --sl-font-mono: 'JetBrains Mono', ui-monospace, monospace;
+}
+
+/* Light mode: parchment page, navy ink, coral/teal accents from the hero. */
+:root[data-theme='light'] {
+  --sl-color-accent-low: #fbe3d8;
+  --sl-color-accent: var(--ga-coral);
+  --sl-color-accent-high: #b8492e;
+
+  --sl-color-white: var(--ga-navy);
+  --sl-color-gray-1: #16283b;
+  --sl-color-gray-2: #33465a;
+  --sl-color-gray-3: #5c6f80;
+  --sl-color-gray-4: #8a97a4;
+  --sl-color-gray-5: #c9cfd6;
+  --sl-color-gray-6: #ece4d3;
+  --sl-color-gray-7: var(--ga-cream-dim);
+
+  --sl-color-black: var(--ga-cream);
+  --sl-color-bg: var(--ga-cream);
+  --sl-color-bg-nav: var(--ga-cream-dim);
+  --sl-color-bg-sidebar: var(--ga-cream-dim);
+  --sl-color-bg-inline-code: #f1e7d3;
+  --sl-color-hairline: #e2d5b8;
+  --sl-color-hairline-light: #eee3c9;
+  --sl-color-hairline-shade: #e2d5b8;
+}
+
+/* Dark mode: the hero's navy frame becomes the page, cream/teal/coral pop. */
+:root[data-theme='dark'],
+:root:not([data-theme='light']) {
+  --sl-color-accent-low: #35251f;
+  --sl-color-accent: var(--ga-coral);
+  --sl-color-accent-high: #f5ab90;
+
+  --sl-color-white: var(--ga-cream);
+  --sl-color-gray-1: #eee5d1;
+  --sl-color-gray-2: #cfc4ab;
+  --sl-color-gray-3: #9aa6b3;
+  --sl-color-gray-4: #64778a;
+  --sl-color-gray-5: #33465a;
+  --sl-color-gray-6: #16283b;
+  --sl-color-gray-7: #0f2333;
+
+  --sl-color-black: var(--ga-navy);
+  --sl-color-bg: var(--ga-navy);
+  --sl-color-bg-nav: var(--ga-navy-soft);
+  --sl-color-bg-sidebar: var(--ga-navy-soft);
+  --sl-color-bg-inline-code: #10263a;
+  --sl-color-hairline: #1c3349;
+  --sl-color-hairline-light: #24435e;
+  --sl-color-hairline-shade: #0a1c2e;
+}
+
+h1,
+h2,
+h3,
+.sl-markdown-content h1,
+.sl-markdown-content h2,
+.sl-markdown-content h3,
+.site-title {
+  font-family: 'Fraunces', ui-serif, Georgia, serif;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+.hero h1 {
+  font-weight: 500;
+}
+
+/* Teal as a secondary accent for links inside prose, distinct from the
+   coral used for interactive UI chrome (nav, buttons, focus rings). */
+.sl-markdown-content a:not(.card) {
+  color: var(--ga-teal);
+  text-decoration-color: color-mix(in srgb, var(--ga-teal) 45%, transparent);
+}
+
+:root[data-theme='dark'] .sl-markdown-content a:not(.card),
+:root:not([data-theme='light']) .sl-markdown-content a:not(.card) {
+  color: #7fb0b2;
+}

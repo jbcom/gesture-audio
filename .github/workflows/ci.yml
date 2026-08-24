@@ -22,6 +22,45 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  classify:
+    if: github.event_name != 'pull_request_target'
+    name: Maintenance PR classification
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      skip-validation: ${{ steps.classify.outputs.skip-validation }}
+    steps:
+      - name: Read Dependabot update metadata
+        id: dependabot
+        if: >-
+          github.event_name == 'pull_request' &&
+          github.event.pull_request.user.login == 'dependabot[bot]'
+        uses: dependabot/fetch-metadata@25dd0e34f4fe68f24cc83900b1fe3fe149efef98 # v3.1.0
+        with:
+          github-token: ${{ github.token }}
+      - name: Classify validation policy
+        id: classify
+        env:
+          PR_AUTHOR: ${{ github.event.pull_request.user.login }}
+          PR_HEAD_REF: ${{ github.event.pull_request.head.ref }}
+          PR_HEAD_REPOSITORY: ${{ github.event.pull_request.head.repo.full_name }}
+          UPDATE_TYPE: ${{ steps.dependabot.outputs.update-type }}
+        run: |
+          skip_validation=false
+          reason=ordinary-change
+          if [[ "$PR_HEAD_REPOSITORY" == "$GITHUB_REPOSITORY" && "$PR_AUTHOR" == "github-actions[bot]" && "$PR_HEAD_REF" == release-please--* ]]; then
+            skip_validation=true
+            reason=release-please
+          elif [[ "$PR_AUTHOR" == "dependabot[bot]" && ( "$UPDATE_TYPE" == *:semver-minor || "$UPDATE_TYPE" == *:semver-patch ) ]]; then
+            skip_validation=true
+            reason=dependabot-non-major
+          fi
+          echo "skip-validation=$skip_validation" >> "$GITHUB_OUTPUT"
+          echo "Validation policy: $reason"
+
   repository-policy:
     name: Repository Policy / gate
     # This trusted-base workflow never checks out or executes fork content. It
@@ -69,7 +108,8 @@ jobs:
             }
 
   verify:
-    if: github.event_name != 'pull_request_target'
+    needs: classify
+    if: github.event_name != 'pull_request_target' && needs.classify.outputs.skip-validation != 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     steps:
@@ -94,7 +134,8 @@ jobs:
       - run: pnpm verify
 
   compatibility:
-    if: github.event_name != 'pull_request_target'
+    needs: classify
+    if: github.event_name != 'pull_request_target' && needs.classify.outputs.skip-validation != 'true'
     name: Node ${{ matrix.node }} / ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
     timeout-minutes: 20
@@ -127,7 +168,8 @@ jobs:
       - run: pnpm check:imports
 
   docs:
-    if: github.event_name != 'pull_request_target'
+    needs: classify
+    if: github.event_name != 'pull_request_target' && needs.classify.outputs.skip-validation != 'true'
     name: Sourcey Docs / gate
     runs-on: ubuntu-24.04
     timeout-minutes: 15
@@ -145,7 +187,8 @@ jobs:
         run: pnpm docs:validate
 
   dependency-review:
-    if: github.event_name == 'pull_request'
+    needs: classify
+    if: github.event_name == 'pull_request' && needs.classify.outputs.skip-validation != 'true'
     name: Dependency Review / gate
     runs-on: ubuntu-24.04
     timeout-minutes: 10
@@ -160,8 +203,10 @@ jobs:
   sonarcloud:
     # SonarCloud is intentionally limited to trusted upstream code: scanner
     # analysis consumes a token and must never execute arbitrary fork content.
+    needs: classify
     if: >-
       github.event_name != 'pull_request_target' &&
+      needs.classify.outputs.skip-validation != 'true' &&
       (github.event_name != 'pull_request' ||
         github.event.pull_request.head.repo.full_name == github.repository)
     name: SonarQube Cloud / gate

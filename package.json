@@ -91,7 +91,7 @@
     "unlock",
     "audio-sprite"
   ],
-  "author": "Jon Bogaty",
+  "author": "Jon Bogaty <jon@jonbogaty.com>",
   "typesVersions": {
     "*": {
       "build-tools": [

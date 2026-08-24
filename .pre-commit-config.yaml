@@ -1,15 +1,23 @@
+default_install_hook_types: [pre-commit, commit-msg]
+default_stages: [pre-commit]
+
 repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v6.0.0
+    hooks:
+      - id: check-added-large-files
+      - id: check-json
+      - id: check-merge-conflict
+      - id: check-toml
+      - id: check-yaml
+      - id: end-of-file-fixer
+      - id: trailing-whitespace
+      - id: detect-private-key
   - repo: local
     hooks:
-      - id: biome-check
-        name: Biome lint + format
+      - id: biome
+        name: biome
+        entry: pnpm exec biome check
         language: system
-        entry: pnpm exec biome check --write
-        types_or: [ts, javascript, json]
+        files: '\\.(?:[cm]?js|[cm]?ts|json)$'
         pass_filenames: true
-
-  - repo: https://github.com/compilerla/conventional-pre-commit
-    rev: v4.4.0
-    hooks:
-      - id: conventional-pre-commit
-        stages: [commit-msg]

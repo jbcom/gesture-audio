@@ -6,16 +6,16 @@
       "src/**",
       "tests/**",
       "scripts/**",
-      "docs-site/*.mjs",
-      "docs-site/*.json",
-      "docs-site/src/**/*.ts",
+      "docs/*.mjs",
+      "docs/*.json",
+      "docs/**/*.ts",
       "*.ts",
       "*.mjs",
       "*.json",
       "!!**/node_modules",
       "!!**/dist",
       "!!**/coverage",
-      "!!**/.astro"
+      "!!docs/dist"
     ]
   },
   "formatter": {

@@ -1,0 +1,16 @@
+reviews:
+  profile: assertive
+  request_changes_workflow: true
+  high_level_summary: true
+  auto_review:
+    enabled: true
+  pre_merge_checks:
+    title:
+      mode: error
+      requirements: "Use a Conventional Commit type such as feat:, fix:, docs:, test:, refactor:, build:, ci:, chore:, or perf:."
+    description:
+      mode: warning
+
+# Review public API, security boundaries, and generated documentation as part
+# of the diff. Fork-origin control-plane changes are independently rejected by
+# the trusted Repository Policy gate in ci.yml.

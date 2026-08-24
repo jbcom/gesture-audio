@@ -232,6 +232,41 @@ describe('setAndPersistBusVolume', () => {
     const { setBusVolume } = await import('../src/buses');
     expect(vi.mocked(setBusVolume)).toHaveBeenLastCalledWith('sfx', 0.8);
   });
+
+  it('serializes overlapping writes so an older failure cannot roll back a newer value', async () => {
+    let current = makePrefs({ sfx: 80 });
+    let rejectFirst: ((error: Error) => void) | undefined;
+    const firstUpdate = new Promise<void>((_resolve, reject) => {
+      rejectFirst = reject;
+    });
+    let updateCount = 0;
+    const store: AudioPrefsStore & {
+      get: ReturnType<typeof vi.fn>;
+      update: ReturnType<typeof vi.fn>;
+    } = {
+      get: vi.fn(async () => current),
+      update: vi.fn(async (patch: { audioVolumes: Record<string, number> }) => {
+        updateCount += 1;
+        if (updateCount === 1) return firstUpdate;
+        current = { ...current, audioVolumes: patch.audioVolumes };
+      }),
+    };
+
+    const first = setAndPersistBusVolume('sfx', 20, store);
+    const firstRejection = expect(first).rejects.toThrow('first write failed');
+    await vi.waitFor(() => expect(store.update).toHaveBeenCalledTimes(1));
+    const second = setAndPersistBusVolume('sfx', 90, store);
+    await Promise.resolve();
+    expect(store.update).toHaveBeenCalledTimes(1);
+
+    rejectFirst?.(new Error('first write failed'));
+    await firstRejection;
+    await second;
+
+    const { setBusVolume } = await import('../src/buses');
+    expect(vi.mocked(setBusVolume)).toHaveBeenLastCalledWith('sfx', 0.9);
+    expect(current.audioVolumes.sfx).toBe(90);
+  });
 });
 
 describe('setAndPersistBusMute', () => {

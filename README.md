@@ -117,7 +117,8 @@ interface AudioPrefsStore {
 ```
 
 Values are rounded and clamped before runtime application and persistence.
-Failed writes restore the previous live mix before rethrowing. Focus-loss and
+Writes are serialized per store, and failed writes restore the previous live
+mix before rethrowing without racing newer changes. Focus-loss and
 global-preference mutes are separate layers, so regaining focus cannot
 accidentally undo an explicit user mute. The bridge never writes settings while
 applying runtime mute behavior.

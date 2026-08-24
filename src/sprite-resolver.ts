@@ -123,7 +123,7 @@ function _flattenMap(raw: unknown): { map: SpriteMap; warnings: string[] } {
     return { map: {}, warnings: ['sprite map must be a JSON object'] };
   }
   const obj = raw as Record<string, unknown>;
-  const flat: SpriteMap = {};
+  const flat = Object.create(null) as SpriteMap;
   const warnings: string[] = [];
   const topLevelEntries = Object.entries(obj);
   const flatShape = topLevelEntries.some(([, value]) => isSpriteEntry(value));
@@ -133,7 +133,7 @@ function _flattenMap(raw: unknown): { map: SpriteMap; warnings: string[] } {
       warnings.push(`${context}: invalid cue entry`);
       return;
     }
-    if (flat[cue]) {
+    if (Object.hasOwn(flat, cue)) {
       warnings.push(`${context}: duplicate cue name "${cue}"`);
       return;
     }

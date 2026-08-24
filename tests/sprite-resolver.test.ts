@@ -158,6 +158,17 @@ describe('initSpriteResolver', () => {
     expect(cues['ring-bell']).toBeDefined();
   });
 
+  it('preserves prototype-named cues as ordinary own properties', async () => {
+    const map = JSON.parse(
+      '{"constructor":{"start_ms":0,"end_ms":100,"file":"ui/sprite"},"__proto__":{"start_ms":100,"end_ms":200,"file":"ui/sprite"}}',
+    ) as unknown;
+    mockFetchWith(map);
+    await initSpriteResolver({ strict: true });
+    const cues = _getCueMap();
+    expect(Object.hasOwn(cues, 'constructor')).toBe(true);
+    expect(Object.hasOwn(cues, '__proto__')).toBe(true);
+  });
+
   it('is idempotent — calling twice does not rebuild Howls', async () => {
     mockFetchWith(FLAT_SPRITE_MAP);
     await initSpriteResolver();

@@ -25,6 +25,8 @@ process modules cannot enter a browser bundle.
 - Manual, focus-loss, and global-preference mutes cannot undo one another.
 - Resolver initialization is idempotent for identical options and rejects
   different options until disposal.
+- Preference read/update transactions are serialized per store so concurrent
+  sliders cannot overwrite a newer runtime or persisted value with stale state.
 - Every active Howler sound retains its target bus so live volume and mute
   changes affect loops and long samples, not only future playback.
 - Public runtime imports do not evaluate Node-only build tooling.

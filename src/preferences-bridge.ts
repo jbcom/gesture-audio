@@ -33,6 +33,25 @@ export interface AudioPrefsStore {
 
 const FOCUS_MUTE_REASON = 'focus-loss';
 const PREFERENCE_MUTE_REASON = 'preferences-mute-all';
+const _storeUpdateQueues = new WeakMap<AudioPrefsStore, Promise<void>>();
+
+async function withStoreUpdateLock<T>(
+  store: AudioPrefsStore,
+  operation: () => Promise<T>,
+): Promise<T> {
+  const previous = _storeUpdateQueues.get(store) ?? Promise.resolve();
+  const result = previous.then(operation);
+  const settled = result.then(
+    () => undefined,
+    () => undefined,
+  );
+  _storeUpdateQueues.set(store, settled);
+  try {
+    return await result;
+  } finally {
+    if (_storeUpdateQueues.get(store) === settled) _storeUpdateQueues.delete(store);
+  }
+}
 
 function normalizeVolume100(value: number, label: string): number {
   if (!Number.isFinite(value)) throw new TypeError(`${label} must be a finite number`);
@@ -98,18 +117,20 @@ export async function setAndPersistBusVolume(
 ): Promise<void> {
   const persisted = normalizeVolume100(vol100, 'vol100');
   const linear = persisted / 100;
-  const prefs = validateSnapshot(await store.get());
-  const previous = normalizeVolume100(prefs.audioVolumes[bus] ?? 75, `audioVolumes.${bus}`) / 100;
-  setBusVolume(bus, linear);
-  setResolverVolume(bus, linear);
+  await withStoreUpdateLock(store, async () => {
+    const prefs = validateSnapshot(await store.get());
+    const previous = normalizeVolume100(prefs.audioVolumes[bus] ?? 75, `audioVolumes.${bus}`) / 100;
+    setBusVolume(bus, linear);
+    setResolverVolume(bus, linear);
 
-  try {
-    await store.update({ audioVolumes: { ...prefs.audioVolumes, [bus]: persisted } });
-  } catch (error) {
-    setBusVolume(bus, previous);
-    setResolverVolume(bus, previous);
-    throw error;
-  }
+    try {
+      await store.update({ audioVolumes: { ...prefs.audioVolumes, [bus]: persisted } });
+    } catch (error) {
+      setBusVolume(bus, previous);
+      setResolverVolume(bus, previous);
+      throw error;
+    }
+  });
 }
 
 /**
@@ -132,7 +153,6 @@ export async function syncAudioPrefsFromSettings(
   store: AudioPrefsStore,
   defaultVolume100 = 75,
 ): Promise<void> {
-  const prefs = validateSnapshot(await store.get());
   const fallback = validateDefaultVolume(defaultVolume100);
   const normalizedPatch = Object.fromEntries(
     Object.entries(audioVolumes).map(([bus, value]) => [
@@ -140,28 +160,31 @@ export async function syncAudioPrefsFromSettings(
       normalizeVolume100(value, `audioVolumes.${bus}`),
     ]),
   );
-  const merged = { ...prefs.audioVolumes, ...normalizedPatch };
-  const previousVolumes = new Map<string, number>();
+  await withStoreUpdateLock(store, async () => {
+    const prefs = validateSnapshot(await store.get());
+    const merged = { ...prefs.audioVolumes, ...normalizedPatch };
+    const previousVolumes = new Map<string, number>();
 
-  for (const bus of busNames) {
-    previousVolumes.set(
-      bus,
-      normalizeVolume100(prefs.audioVolumes[bus] ?? fallback, `audioVolumes.${bus}`) / 100,
-    );
-    const vol = normalizeVolume100(merged[bus] ?? fallback, `audioVolumes.${bus}`) / 100;
-    setBusVolume(bus, vol);
-    setResolverVolume(bus, vol);
-  }
-
-  try {
-    await store.update({ audioVolumes: merged });
-  } catch (error) {
-    for (const [bus, volume] of previousVolumes) {
-      setBusVolume(bus, volume);
-      setResolverVolume(bus, volume);
+    for (const bus of busNames) {
+      previousVolumes.set(
+        bus,
+        normalizeVolume100(prefs.audioVolumes[bus] ?? fallback, `audioVolumes.${bus}`) / 100,
+      );
+      const vol = normalizeVolume100(merged[bus] ?? fallback, `audioVolumes.${bus}`) / 100;
+      setBusVolume(bus, vol);
+      setResolverVolume(bus, vol);
     }
-    throw error;
-  }
+
+    try {
+      await store.update({ audioVolumes: merged });
+    } catch (error) {
+      for (const [bus, volume] of previousVolumes) {
+        setBusVolume(bus, volume);
+        setResolverVolume(bus, volume);
+      }
+      throw error;
+    }
+  });
 }
 
 // ---------------------------------------------------------------------------

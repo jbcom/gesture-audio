@@ -50,5 +50,9 @@
   "publishConfig": {
     "access": "restricted",
     "registry": "https://redacted-private-registry.example/api/packages/arcade-cabinet/npm/"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://redacted-private-registry.example/arcade-cabinet/audio-engine"
   }
 }

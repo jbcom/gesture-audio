@@ -89,13 +89,13 @@ Full invariants and error policy: `docs/architecture.md`.
   `Repository Policy / gate` that blocks external fork control-plane changes.
   It runs without secrets or write permissions for ordinary PR validation.
 - **`release.yml`** — `release-please` opens/updates the release PR from
-  Conventional Commit PR titles on `main`; merging it publishes to npm with
-  provenance. See `docs/releasing.md`.
+  Conventional Commit PR titles on `main`; merging it creates the release tag.
 - **`cd.yml`** — rebuilds and deploys `docs/` Sourcey output to this repo's own GitHub
-  Pages (`build_type: workflow`) on every push to `main`. GitHub resolves
-  `jonbogaty.com/gesture-audio/` for this repo automatically because the org
-  apex repo `jbcom/jbcom.github.io` owns the verified `jonbogaty.com` custom
-  domain — no cross-repo push is involved.
+  Pages (`build_type: workflow`) on every push to `main`, and publishes a
+  release tag through npm OIDC (`id-token: write`) with no token fallback.
+  GitHub resolves `jonbogaty.com/gesture-audio/` for this repo automatically
+  because the org apex repo `jbcom/jbcom.github.io` owns the verified
+  `jonbogaty.com` custom domain — no cross-repo push is involved.
 
 All GitHub Actions are pinned to exact commit SHAs (with a `# vX.Y.Z` comment)
 per the fleet's supply-chain convention. Resolve a new SHA with `gh api

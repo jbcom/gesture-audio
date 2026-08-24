@@ -4,6 +4,14 @@ Notable changes to this project are recorded here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and releases follow
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.3](https://github.com/jbcom/gesture-audio/compare/v0.2.2...v0.2.3) (2026-08-24)
+
+
+### Bug Fixes
+
+* **sonar:** emit lcov coverage ([7ff6813](https://github.com/jbcom/gesture-audio/commit/7ff6813ff8319fed519b6f048cf269bd0b15f046))
+* **sonar:** emit lcov coverage ([d75436f](https://github.com/jbcom/gesture-audio/commit/d75436f0f4082460eb1fc9fa7e03e2a20bba3a64))
+
 ## [0.2.2](https://github.com/jbcom/gesture-audio/compare/v0.2.1...v0.2.2) (2026-08-24)
 
 

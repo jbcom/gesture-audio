@@ -23,6 +23,8 @@ jobs:
           node-version-file: '.nvmrc'
       - run: corepack enable
       - run: pnpm install --frozen-lockfile
+      - name: Install audio verification tools
+        run: sudo apt-get update && sudo apt-get install --yes ffmpeg
       - name: Lockfile is in sync
         run: |
           pnpm install --lockfile-only

@@ -20,6 +20,7 @@
   --ga-cream-dim: #f2e9d6;
   --ga-coral: #f08665;
   --ga-teal: #4d7d7f;
+  --ga-teal-link: #3c696b; /* darkened for 4.5:1+ contrast on cream (WCAG AA) */
   --ga-gold: #d4a24a;
 
   --sl-font: 'Inter', system-ui, sans-serif;
@@ -96,8 +97,8 @@ h3,
 /* Teal as a secondary accent for links inside prose, distinct from the
    coral used for interactive UI chrome (nav, buttons, focus rings). */
 .sl-markdown-content a:not(.card) {
-  color: var(--ga-teal);
-  text-decoration-color: color-mix(in srgb, var(--ga-teal) 45%, transparent);
+  color: var(--ga-teal-link);
+  text-decoration-color: color-mix(in srgb, var(--ga-teal-link) 45%, transparent);
 }
 
 :root[data-theme='dark'] .sl-markdown-content a:not(.card),

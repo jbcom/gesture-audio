@@ -19,5 +19,5 @@ repos:
         name: biome
         entry: pnpm exec biome check
         language: system
-        types_or: [javascript, json, ts, yaml]
+        files: '\\.(?:[cm]?js|[cm]?ts|json)$'
         pass_filenames: true

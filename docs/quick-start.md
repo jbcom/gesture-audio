@@ -39,14 +39,14 @@ async function bootstrapAudio() {
 }
 
 const removeGestureTrigger = registerAudioGestureTrigger(bootstrapAudio);
-const soundId = playCue('drawer-open', 'sfx');
 ```
 
 Register the trigger early in application startup. The callback does not run
 until a click, keydown, or touchstart supplies the required browser gesture.
 Concurrent gestures share one attempt; listeners are removed only after both
 the Web Audio unlock and bootstrap succeed. Call the returned cleanup during
-hot reload or component teardown.
+hot reload or component teardown. From a later application action, after the
+gesture bootstrap has resolved, play a cue with `playCue('drawer-open', 'sfx')`.
 
 ## Preferences contract
 

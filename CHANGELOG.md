@@ -4,6 +4,14 @@ Notable changes to this project are recorded here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and releases follow
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.1](https://github.com/jbcom/gesture-audio/compare/v0.2.0...v0.2.1) (2026-08-24)
+
+
+### Bug Fixes
+
+* **ci:** provision audio tools for release verification ([8907405](https://github.com/jbcom/gesture-audio/commit/8907405d80bb134869ccd6bc5e0d3f4f1a3cffb4))
+* **ci:** provision audio tools for release verification ([237bf1b](https://github.com/jbcom/gesture-audio/commit/237bf1b178a7591ddbdca7257d14b48ab4639378))
+
 ## [0.2.0](https://github.com/jbcom/gesture-audio/compare/v0.1.2...v0.2.0) (2026-08-24)
 
 

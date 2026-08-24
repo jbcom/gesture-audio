@@ -31,4 +31,6 @@ state.
 
 Cue names, gameplay policy, persistence implementation, and product-specific
 audio decisions are deliberately local. Start with the [quick start](./quick-start.md)
-or read the [architecture](./architecture.md) before integrating the library.
+then follow the complete [integration guide](./integration.md). The
+[architecture](./architecture.md) records the invariants that make those
+boundaries reliable.

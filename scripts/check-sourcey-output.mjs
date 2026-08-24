@@ -5,6 +5,7 @@ const output = resolve('docs/dist');
 const required = [
   'index.html',
   'quick-start/index.html',
+  'integration/index.html',
   'api-reference/index.html',
   'architecture/index.html',
   'sitemap.xml',
@@ -26,6 +27,7 @@ const requiredText = [
   ['index.html', index, 'https://jonbogaty.com/gesture-audio/'],
   ['index.html', index, 'og:image'],
   ['sitemap.xml', sitemap, 'https://jonbogaty.com/gesture-audio/quick-start/'],
+  ['sitemap.xml', sitemap, 'https://jonbogaty.com/gesture-audio/integration/'],
   ['llms.txt', llms, '/quick-start/'],
 ];
 

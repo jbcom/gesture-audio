@@ -64,3 +64,6 @@ interface AudioPrefsStore {
 Volume percentages are rounded and clamped. Writes are serialized per store;
 when a write rejects, the earlier runtime mix is restored without overwriting
 a newer change. See the complete [browser bootstrap example](https://github.com/jbcom/gesture-audio/blob/main/examples/browser-bootstrap.ts).
+
+For teardown, SSR placement, strict-versus-optional audio policy, and a
+complete end-to-end example, continue to the [integration guide](./integration.md).

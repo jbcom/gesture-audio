@@ -81,7 +81,9 @@ in-flight attempt. Listeners are removed only after both Tone unlock and the
 application bootstrap succeed; a rejected attempt stays retryable.
 
 See [`examples/browser-bootstrap.ts`](./examples/browser-bootstrap.ts) for a
-complete local-storage-backed example.
+complete local-storage-backed example. The published documentation has a
+[complete integration guide](https://jonbogaty.com/gesture-audio/integration/)
+covering teardown, strictness, SSR boundaries, and the intended lifecycle.
 
 ## Sprite maps
 
@@ -178,6 +180,9 @@ The package ships ESM and CommonJS builds with distinct declarations and
 exports. CI checks real packed imports plus `publint` and
 `are-the-types-wrong`. Browser globals are accessed only when the relevant API
 is called, so server-side importing is safe; starting playback still requires a browser.
+
+The [API reference](https://jonbogaty.com/gesture-audio/api-reference/) records
+every public function's input ranges, return behavior, and cleanup contract.
 
 ## Troubleshooting
 

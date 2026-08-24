@@ -1,0 +1,22 @@
+/* gesture-audio keeps the warm, tactile palette from its README artwork. */
+:root {
+  --sourcey-ink: #07182b;
+  --sourcey-paper: #fbf4e4;
+  --sourcey-teal: #3c696b;
+}
+
+body {
+  background: var(--sourcey-paper);
+  color: var(--sourcey-ink);
+}
+
+a {
+  color: var(--sourcey-teal);
+}
+
+@media (prefers-color-scheme: dark) {
+  body {
+    background: var(--sourcey-ink);
+    color: var(--sourcey-paper);
+  }
+}

@@ -24,20 +24,18 @@ mise is a local-only convenience, not a CI dependency.
 
 ## Source of truth
 
-- **`docs-site/` (Astro Starlight) is the canonical human/AI-facing docs
-  site**, deployed to `https://jonbogaty.com/gesture-audio/` on every push to
-  `main` by `cd.yml`. It builds `llms.txt`, `llms-small.txt`, and
-  `llms-full.txt` via `starlight-llms-txt` — read those first when answering
-  questions about the public API from outside this repo. Build it locally
-  with `pnpm docs:build`; iterate with `pnpm docs:dev`.
-- `docs/*.md` (architecture, releasing, troubleshooting) are the **hand-authored
-  source** the Starlight guide pages under `docs-site/src/content/docs/guides/`
-  are kept in sync with. `scripts/check-docs.mjs` validates relative links in
-  the root-level markdown files (README, CONTRIBUTING, SECURITY, CHANGELOG,
-  `examples/README.md`, `docs/*.md`) — those files also ship inside the
-  published npm tarball via `package.json#files`, so every relative link and
-  image reference in them must resolve both inside this repo and inside an
-  installed copy of the package.
+- **`docs/` is the canonical Sourcey documentation site**, deployed to
+  `https://jonbogaty.com/gesture-audio/` on every trusted push to `main` by
+  `cd.yml`. `docs/sourcey.config.ts` defines its Sourcey navigation, branding,
+  subdirectory URLs, social metadata, edit links, search, and generated
+  `llms.txt` / `llms-full.txt`. Build it with `pnpm docs:build`; use
+  `pnpm docs:dev` while editing. `docs/dist/` is generated and never committed.
+- Root Markdown (README, CONTRIBUTING, SECURITY, CHANGELOG, examples, and
+  `docs/*.md`) is hand-authored source shipped in the npm package.
+  `scripts/check-docs.mjs` validates its relative links; Sourcey's generated
+  output is checked by `scripts/check-sourcey-output.mjs`. The root `llms.txt`
+  is repository orientation for coding agents; `docs/dist/llms*.txt` is the
+  generated public-site context and must not be hand-maintained.
 - `src/index.ts` is the only supported runtime import path; it re-exports the
   full public API from `buses.ts`, `init.ts`, `preferences-bridge.ts`, and
   `sprite-resolver.ts`. `src/build-tools/index.ts` is a **separate** entry
@@ -65,8 +63,7 @@ Four single-responsibility modules, no application singleton:
    persistence itself. Read/update transactions are serialized per store so
    concurrent slider drags cannot overwrite a newer value with a stale one.
 
-Full invariants and error policy: `docs-site/src/content/docs/guides/architecture.md`
-(mirrors `docs/architecture.md`).
+Full invariants and error policy: `docs/architecture.md`.
 
 ## Testing
 
@@ -86,14 +83,15 @@ Full invariants and error policy: `docs-site/src/content/docs/guides/architectur
 
 `ci.yml` → `release.yml` → `cd.yml`, each scoped narrowly:
 
-- **`ci.yml`** — `verify` (lint/typecheck/coverage/build/docs-link-check on
-  ubuntu with `ffmpeg` installed), `compatibility` (Node 22/24/26 ×
-  ubuntu/windows/macos), `docs-site` (Astro build, uploaded as a Pages
-  artifact for reuse). Runs on every PR and push to `main`.
+- **`ci.yml`** — fork-safe `verify` (lint/typecheck/coverage/build/link checks
+  on ubuntu with `ffmpeg`), `compatibility` (Node 22/24/26 × ubuntu/windows/
+  macOS), Sourcey docs validation, dependency review, and a trusted-base
+  `Repository Policy / gate` that blocks external fork control-plane changes.
+  It runs without secrets or write permissions for ordinary PR validation.
 - **`release.yml`** — `release-please` opens/updates the release PR from
   Conventional Commit PR titles on `main`; merging it publishes to npm with
-  provenance. See `docs-site/src/content/docs/guides/releasing.md`.
-- **`cd.yml`** — builds and deploys `docs-site/` to this repo's own GitHub
+  provenance. See `docs/releasing.md`.
+- **`cd.yml`** — rebuilds and deploys `docs/` Sourcey output to this repo's own GitHub
   Pages (`build_type: workflow`) on every push to `main`. GitHub resolves
   `jonbogaty.com/gesture-audio/` for this repo automatically because the org
   apex repo `jbcom/jbcom.github.io` owns the verified `jonbogaty.com` custom
@@ -106,14 +104,13 @@ hand-typing one.
 
 ## Conventions
 
-- Conventional Commits are the release contract — PR titles land on `main`
-  via squash merge and directly drive `release-please`'s version bump and
-  changelog. Use `feat!:` or a `BREAKING CHANGE:` footer only for an
-  intentional public API break.
-- `pnpm-workspace.yaml` lists two members: `.` (the library) and `docs-site`
-  (the Astro site). A single root `pnpm-lock.yaml` covers both — there is no
-  separate `docs-site/pnpm-lock.yaml`.
+- Conventional Commits are the release contract. PR titles and the preserved
+  merge-commit history drive `release-please`'s version bump and changelog.
+  Use `feat!:` or a `BREAKING CHANGE:` footer only for an intentional public
+  API break.
+- `pnpm-workspace.yaml` lists two members: `.` (the library) and `docs`
+  (the Sourcey site). A single root `pnpm-lock.yaml` covers both.
 - Biome (`biome.json`) is the only linter/formatter; its `files.includes`
-  covers `src/**`, `tests/**`, `scripts/**`, and `docs-site/{*.mjs,*.json,src/**/*.ts}`.
-  `docs-site/src/content/**/*.md(x)` is intentionally excluded (Starlight
-  content, not code).
+  covers `src/**`, `tests/**`, `scripts/**`, and Sourcey configuration.
+  Markdown is checked through the rendered Sourcey output rather than treated
+  as application code.

@@ -10,7 +10,14 @@ const documents = [
   'llms.txt',
   'examples/README.md',
   'docs/architecture.md',
+  'docs/api-reference.md',
+  'docs/changelog.md',
+  'docs/contributing.md',
+  'docs/index.md',
+  'docs/quick-start.md',
   'docs/releasing.md',
+  'docs/security.md',
+  'docs/sprite-maps.md',
   'docs/troubleshooting.md',
 ];
 const failures = [];

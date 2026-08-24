@@ -58,8 +58,9 @@
     "lint": "biome check .",
     "lint:fix": "biome check --write .",
     "test:watch": "vitest",
-    "docs:dev": "pnpm --filter docs-site dev",
-    "docs:build": "pnpm --filter docs-site build",
+    "docs:dev": "pnpm --filter gesture-audio-docs dev",
+    "docs:build": "pnpm --filter gesture-audio-docs build && node scripts/check-sourcey-output.mjs",
+    "docs:validate": "pnpm --filter gesture-audio-docs validate && node scripts/check-sourcey-output.mjs",
     "prepack": "pnpm build"
   },
   "peerDependencies": {

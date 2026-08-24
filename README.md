@@ -1,6 +1,6 @@
 # @jbdevprimary/gesture-audio
 
-![A fingertip unlocks four audio lanes that converge through a limiter into one waveform.](./docs/assets/gesture-audio-hero.webp)
+![A fingertip unlocks four audio lanes that converge through a limiter into one waveform.](https://raw.githubusercontent.com/jbcom/gesture-audio/main/docs/assets/gesture-audio-hero.webp)
 
 [![CI](https://github.com/jbcom/gesture-audio/actions/workflows/ci.yml/badge.svg)](https://github.com/jbcom/gesture-audio/actions/workflows/ci.yml)
 [![npm](https://img.shields.io/npm/v/@jbdevprimary/gesture-audio.svg)](https://www.npmjs.com/package/@jbdevprimary/gesture-audio)
@@ -172,7 +172,7 @@ audio. Declared sprite buses are required; optional flat groups warn, while
 The runtime dependency direction is intentionally one-way: lifecycle unlocks
 the caller bootstrap; Tone owns the continuous bus graph; Howler owns sample
 playback; the preference bridge mirrors policy into both. Details and
-invariants are in [`docs/architecture.md`](./docs/architecture.md).
+invariants are in the [architecture guide](https://jonbogaty.com/gesture-audio/architecture/).
 
 The package ships ESM and CommonJS builds with distinct declarations and
 exports. CI checks real packed imports plus `publint` and
@@ -182,7 +182,7 @@ is called, so server-side importing is safe; starting playback still requires a 
 ## Troubleshooting
 
 Common autoplay, silent-cue, sprite-format, and `ffmpeg` failures are covered
-in [`docs/troubleshooting.md`](./docs/troubleshooting.md). The most important
+in the [troubleshooting guide](https://jonbogaty.com/gesture-audio/troubleshooting/). The most important
 rule is to register the gesture trigger early and do all audio bootstrap work
 inside its callback.
 
@@ -200,8 +200,8 @@ tests, and package metadata/type validation. See
 [`CONTRIBUTING.md`](./CONTRIBUTING.md) and [`SECURITY.md`](./SECURITY.md).
 
 Releases use Conventional Commit titles and release-please; npm publishing is
-performed from the generated Git tag with provenance. See
-[`docs/releasing.md`](./docs/releasing.md).
+performed from the generated Git tag with provenance. See the
+[releasing guide](https://jonbogaty.com/gesture-audio/releasing/).
 
 ## License
 

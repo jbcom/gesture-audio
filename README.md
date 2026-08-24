@@ -92,6 +92,104 @@ Bus mute is non-destructive: unmuting restores the last configured gain, and
 volume changes made while muted take effect when the bus is unmuted.
 `muteOnFocusLoss` applies to the full bus list you supply.
 
+## API reference
+
+The example above covers the common path — build buses, load the sprite map,
+apply prefs, defer everything behind a gesture. The rest of the public API:
+
+### Bus control (`buses.ts`)
+
+```ts
+import { getBuses, setBusVolume, muteBus, duckBus, disposeBuses } from '@jbcom/gesture-audio';
+
+// Read the live topology built by buildBuses() — same object every call.
+const buses = getBuses<(typeof BUS_NAMES)[number]>();
+
+// Settings-panel slider: 0-1 linear gain, ramped over 50ms by default.
+setBusVolume('music', 0.6);
+setBusVolume('sfx', 0.8, 0); // rampMs=0 — instant, e.g. on startup
+
+// Mute/unmute non-destructively — unmuting restores the last configured level.
+muteBus('voice', true);
+muteBus('voice', false);
+
+// Ducking: temporarily attenuate a bus by a dB amount, auto-restoring after
+// durationMs (e.g. duck music while a narration line plays).
+duckBus('music', -12, 2000);
+
+// Tear down the whole graph — app unmount, hot-reload, or test cleanup.
+disposeBuses();
+```
+
+### Engine lifecycle (`init.ts`)
+
+```ts
+import { startAudioEngine, isAudioEngineStarted } from '@jbcom/gesture-audio';
+
+// Usually you don't call this directly — registerAudioGestureTrigger wires
+// it to the first click/keydown/touchstart. But a "Tap to start" overlay
+// can call it explicitly from its own click handler (which is itself a
+// user gesture, so this is safe):
+async function onTapToStart() {
+  await startAudioEngine(bootstrap);
+}
+
+// Gate UI on whether audio is live yet (e.g. hide the "tap to start" overlay).
+if (isAudioEngineStarted()) {
+  /* show the game, hide the overlay */
+}
+```
+
+### Preferences bridge extras (`preferences-bridge.ts`)
+
+```ts
+import { setAndPersistBusMute, registerFocusLossMute } from '@jbcom/gesture-audio';
+
+// Mute a single bus at runtime (e.g. a per-bus mute button). Unlike
+// setAndPersistBusVolume this is NOT persisted to the store — persist it
+// yourself (e.g. by storing volume=0) if it needs to survive reload.
+setAndPersistBusMute('voice', true);
+
+// Auto-mute every configured bus on window blur, restoring on focus only if
+// the store still reports muteOnFocusLoss: true at that time. Call with
+// enabled=false to tear the listeners down.
+registerFocusLossMute(true, myPrefsStore, BUS_NAMES);
+registerFocusLossMute(false);
+```
+
+### Sprite resolver extras (`sprite-resolver.ts`)
+
+```ts
+import {
+  stopCue,
+  setResolverVolume,
+  setResolverMute,
+  setResolverMasterBus,
+  disposeSpriteResolver,
+} from '@jbcom/gesture-audio';
+
+// playCue() returns a Howler sound id you can stop early (e.g. a looping
+// cue interrupted by a state change).
+const id = playCue('crowd-riot-loop', 'crowd');
+stopCue(id);
+
+// Lower-level volume/mute knobs the preferences bridge calls for you —
+// use these directly only if you're not going through
+// applyPersistedAudioPrefs/setAndPersistBusVolume.
+setResolverVolume('sfx', 0.8);
+setResolverMute('sfx', false);
+
+// Designate which bus name acts as the resolver's "master" override (mutes
+// / scales every cue regardless of target bus). Optional — buses.ts already
+// treats its first bus name as master by convention, and the preferences
+// bridge relies on that; call this only if your resolver's master bus name
+// differs from what you pass to applyPersistedAudioPrefs.
+setResolverMasterBus('master');
+
+// Tear down all loaded Howl instances — tests / hot-reload.
+disposeSpriteResolver();
+```
+
 ## `@jbcom/gesture-audio/build-tools`
 
 A generic CI asset verifier (`verifySprites` / `runVerifySpritesCli`) that

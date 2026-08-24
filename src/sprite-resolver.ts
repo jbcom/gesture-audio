@@ -25,9 +25,17 @@
 
 import { Howl } from 'howler';
 
+/**
+ * A single cue's location within a sprite-sheet audio file, as produced by
+ * a game's own audio-fetch build step (see the module-level sprite map
+ * format comment above).
+ */
 export interface SpriteEntry {
+  /** Offset in milliseconds where this cue's audio begins within `file`. */
   start_ms: number;
+  /** Offset in milliseconds where this cue's audio ends within `file`. */
   end_ms: number;
+  /** Sprite-sheet file this cue belongs to (relative to `audioBaseUrl`, without extension). */
   file: string;
 }
 
@@ -162,7 +170,7 @@ export async function initSpriteResolver(opts: SpriteResolverOptions = {}): Prom
     const res = await fetch(spriteMapUrl);
     if (!res.ok) {
       console.warn(
-        `[audio-engine/sprite-resolver] sprite map not found (${res.status}) — audio cues disabled`,
+        `[gesture-audio/sprite-resolver] sprite map not found (${res.status}) — audio cues disabled`,
       );
       _ready = true;
       return;
@@ -182,7 +190,7 @@ export async function initSpriteResolver(opts: SpriteResolverOptions = {}): Prom
     }
   } catch (err) {
     console.warn(
-      '[audio-engine/sprite-resolver] Failed to load sprite map — audio cues disabled',
+      '[gesture-audio/sprite-resolver] Failed to load sprite map — audio cues disabled',
       err,
     );
   }
@@ -197,7 +205,7 @@ export async function initSpriteResolver(opts: SpriteResolverOptions = {}): Prom
 export function playCue(cueName: string, busTarget = 'sfx'): number {
   if (!_ready) {
     console.warn(
-      '[audio-engine/sprite-resolver] resolver not initialised; call initSpriteResolver() first',
+      '[gesture-audio/sprite-resolver] resolver not initialised; call initSpriteResolver() first',
     );
     return -1;
   }

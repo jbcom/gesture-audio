@@ -78,7 +78,7 @@ export function registerAudioGestureTrigger(bootstrap: () => Promise<void>): voi
       .catch((err) => {
         // Keep the gesture handlers armed: a later real interaction can retry
         // after autoplay policy or a transient audio-device failure clears.
-        console.warn('[audio-engine/init] Failed to start audio engine:', err);
+        console.warn('[gesture-audio/init] Failed to start audio engine:', err);
       });
   };
 

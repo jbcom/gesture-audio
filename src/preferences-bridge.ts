@@ -170,7 +170,7 @@ export function registerFocusLossMute(
         }
       })
       .catch(() => {
-        console.warn('[audio-engine/preferences] Could not restore focus-loss mute state');
+        console.warn('[gesture-audio/preferences] Could not restore focus-loss mute state');
       });
   };
 

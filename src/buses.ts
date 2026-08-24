@@ -16,11 +16,23 @@
 
 import * as Tone from 'tone';
 
+/**
+ * A single named bus in the topology — a Tone.js Gain node plus the mute
+ * flag `muteBus`/`setBusVolume` use to distinguish "silenced but a volume
+ * is still remembered" from the gain actually being zero.
+ */
 export interface Bus {
+  /** The underlying Tone.js gain node this bus routes audio through. */
   gain: Tone.Gain;
+  /** Whether the bus is currently muted (see `muteBus`). */
   muted: boolean;
 }
 
+/**
+ * The full bus topology returned by `buildBuses`/`getBuses`: one `Bus` per
+ * caller-supplied name (keyed by the same string literal union `B`), plus
+ * the shared `limiter` every bus ultimately routes through before output.
+ */
 export type AudioBuses<B extends string> = Record<B, Bus> & { limiter: Tone.Limiter };
 
 let _buses: AudioBuses<string> | null = null;

@@ -51,7 +51,7 @@ jobs:
         run: |
           skip_validation=false
           reason=ordinary-change
-          if [[ "$PR_HEAD_REPOSITORY" == "$GITHUB_REPOSITORY" && ( "$PR_AUTHOR" == "github-actions[bot]" || "$PR_AUTHOR" == "app/github-actions" ) && "$PR_HEAD_REF" == release-please--* ]]; then
+          if [[ "$PR_HEAD_REPOSITORY" == "$GITHUB_REPOSITORY" && ( "$PR_AUTHOR" == "github-actions[bot]" || "$PR_AUTHOR" == "app/github-actions" || "$PR_AUTHOR" == "jbdevprimary" ) && "$PR_HEAD_REF" == release-please--* ]]; then
             skip_validation=true
             reason=release-please
           elif [[ "$PR_AUTHOR" == "dependabot[bot]" && ( "$UPDATE_TYPE" == *:semver-minor || "$UPDATE_TYPE" == *:semver-patch ) ]]; then

@@ -66,16 +66,18 @@ jobs:
     # This trusted-base workflow never checks out or executes fork content. It
     # only prevents an external fork from changing control-plane files before
     # its untrusted validation run can be considered mergeable.
-    if: >-
-      github.event_name == 'pull_request_target' &&
-      github.event.pull_request.head.repo.full_name != github.repository
+    if: github.event_name == 'pull_request_target'
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     permissions:
       contents: read
       pull-requests: read
     steps:
+      - name: Trusted upstream PR
+        if: github.event.pull_request.head.repo.full_name == github.repository
+        run: echo "Trusted upstream PR; external-fork control-plane policy does not apply."
       - name: Reject external control-plane changes
+        if: github.event.pull_request.head.repo.full_name != github.repository
         uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8.0.0
         with:
           script: |

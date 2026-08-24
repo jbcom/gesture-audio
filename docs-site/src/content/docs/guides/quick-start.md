@@ -25,6 +25,10 @@ import {
   registerAudioGestureTrigger,
   setResolverMasterBus,
 } from '@jbdevprimary/gesture-audio';
+// The application owns persistence; implement AudioPrefsStore against your
+// own store. See examples/browser-bootstrap.ts for a full local-storage-
+// backed implementation.
+import { preferences } from './audio-preferences.js';
 
 const BUS_NAMES = ['master', 'music', 'sfx', 'voice'] as const;
 

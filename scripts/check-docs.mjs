@@ -24,7 +24,13 @@ for (const document of documents) {
   for (const match of source.matchAll(/!?(?:\[[^\]]*\])\(([^)]+)\)/g)) {
     const target = match[1]?.trim();
     if (!target || /^(?:https?:|mailto:|#)/.test(target)) continue;
-    const path = decodeURIComponent(target.split('#', 1)[0] ?? '');
+    let path;
+    try {
+      path = decodeURIComponent(target.split('#', 1)[0] ?? '');
+    } catch {
+      failures.push(`${document}: malformed link target ${target}`);
+      continue;
+    }
     if (path && !existsSync(resolve(dirname(document), path))) {
       failures.push(`${document}: broken relative link ${target}`);
     }

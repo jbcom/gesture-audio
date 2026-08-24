@@ -7,7 +7,8 @@ Thanks for taking the time to contribute.
 ```sh
 mise install   # installs the Node + pnpm versions this repo pins
 pnpm install
-pnpm verify     # lint, typecheck, test, build — the same gate CI runs
+pnpm verify     # lint, typecheck, coverage, build, doc/import/package checks,
+                # and the docs site build — the same gate CI runs
 ```
 
 [mise](https://mise.jdx.dev) is a local-only convenience — it reads the same

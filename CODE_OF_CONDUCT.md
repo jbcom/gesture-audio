@@ -28,8 +28,9 @@ Examples of unacceptable behaviour:
 ## Enforcement
 
 Instances of abusive, harassing, or otherwise unacceptable behaviour may be
-reported to the project maintainers. All complaints will be reviewed and
-investigated promptly and fairly.
+reported privately to jon@jonbogaty.com. All complaints will be reviewed and
+investigated promptly and fairly, and reporter identity and details will be
+kept confidential to the extent possible while addressing the incident.
 
 ## Attribution
 

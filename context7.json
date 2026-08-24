@@ -1,0 +1,14 @@
+{
+  "$schema": "https://context7.com/schema/context7.json",
+  "projectTitle": "gesture-audio",
+  "description": "Gesture-gated Tone.js bus graph, Howler sprite resolver, and preferences bridge for browser audio.",
+  "branch": "main",
+  "folders": ["docs", "src", "examples"],
+  "excludeFolders": ["docs/dist", "dist", "coverage", "node_modules", ".agent-state"],
+  "rules": [
+    "Import browser runtime APIs from gesture-audio and Node-only asset verification APIs from gesture-audio/build-tools.",
+    "Call startOnGesture from a real user gesture and treat the supplied bootstrap callback as part of the retryable unlock transaction.",
+    "Use PreferencesBridge with an application-owned preference store; this package never owns persistence.",
+    "Keep generated docs/dist output out of source control and update the hand-authored docs with public API changes."
+  ]
+}

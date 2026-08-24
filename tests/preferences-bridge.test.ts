@@ -20,12 +20,16 @@ const busState = vi.hoisted(() => ({
 
 vi.mock('../src/buses', () => {
   const s = busState;
+  const muteBus = vi.fn((bus: string, muted: boolean) => {
+    s.muteBusCalls.push([bus, muted]);
+  });
   return {
     setBusVolume: vi.fn((bus: string, vol: number, ramp?: number) => {
       s.setBusVolumeCalls.push([bus, vol, ramp]);
     }),
-    muteBus: vi.fn((bus: string, muted: boolean) => {
-      s.muteBusCalls.push([bus, muted]);
+    muteBus,
+    _setBusMuteReason: vi.fn((bus: string, _reason: string, muted: boolean) => {
+      muteBus(bus, muted);
     }),
     getBuses: vi.fn(() => ({
       master: { gain: { gain: { value: 1, rampTo: vi.fn() } }, muted: false },
@@ -41,21 +45,25 @@ vi.mock('../src/buses', () => {
 
 vi.mock('../src/sprite-resolver', () => {
   const s = busState;
+  const setResolverMute = vi.fn((bus: string, muted: boolean) => {
+    s.resolverMuteCalls.push([bus, muted]);
+  });
   return {
     setResolverVolume: vi.fn((bus: string, vol: number) => {
       s.resolverVolumeCalls.push([bus, vol]);
     }),
-    setResolverMute: vi.fn((bus: string, muted: boolean) => {
-      s.resolverMuteCalls.push([bus, muted]);
+    setResolverMute,
+    _setResolverMuteReason: vi.fn((bus: string, _reason: string, muted: boolean) => {
+      setResolverMute(bus, muted);
     }),
     initSpriteResolver: vi.fn().mockResolvedValue(undefined),
   };
 });
 
 import {
-  applyPersistedAudioPrefs,
   type AudioPrefsSnapshot,
   type AudioPrefsStore,
+  applyPersistedAudioPrefs,
   registerFocusLossMute,
   setAndPersistBusMute,
   setAndPersistBusVolume,
@@ -95,12 +103,12 @@ function makeStore(initial: AudioPrefsSnapshot): AudioPrefsStore & {
 }
 
 function resetState() {
+  registerFocusLossMute(false);
   busState.setBusVolumeCalls.length = 0;
   busState.muteBusCalls.length = 0;
   busState.resolverVolumeCalls.length = 0;
   busState.resolverMuteCalls.length = 0;
   vi.clearAllMocks();
-  registerFocusLossMute(false);
 }
 
 beforeEach(resetState);
@@ -194,6 +202,70 @@ describe('setAndPersistBusVolume', () => {
 
     const { setBusVolume } = await import('../src/buses');
     expect(vi.mocked(setBusVolume)).toHaveBeenCalledWith('crowd', 1);
+    expect(store.update).toHaveBeenCalledWith(
+      expect.objectContaining({ audioVolumes: expect.objectContaining({ crowd: 100 }) }),
+    );
+  });
+
+  it('rounds persisted volume so runtime and reloaded values agree', async () => {
+    const store = makeStore(makePrefs());
+    await setAndPersistBusVolume('sfx', 52.6, store);
+    const { setBusVolume } = await import('../src/buses');
+    expect(vi.mocked(setBusVolume)).toHaveBeenCalledWith('sfx', 0.53);
+    expect(store.update).toHaveBeenCalledWith(
+      expect.objectContaining({ audioVolumes: expect.objectContaining({ sfx: 53 }) }),
+    );
+  });
+
+  it('rejects non-finite values before changing runtime state', async () => {
+    const store = makeStore(makePrefs());
+    await expect(setAndPersistBusVolume('sfx', Number.NaN, store)).rejects.toThrow(/finite/);
+    const { setBusVolume } = await import('../src/buses');
+    expect(setBusVolume).not.toHaveBeenCalled();
+    expect(store.update).not.toHaveBeenCalled();
+  });
+
+  it('rolls runtime volume back when persistence fails', async () => {
+    const store = makeStore(makePrefs({ sfx: 80 }));
+    store.update.mockRejectedValueOnce(new Error('disk full'));
+    await expect(setAndPersistBusVolume('sfx', 20, store)).rejects.toThrow('disk full');
+    const { setBusVolume } = await import('../src/buses');
+    expect(vi.mocked(setBusVolume)).toHaveBeenLastCalledWith('sfx', 0.8);
+  });
+
+  it('serializes overlapping writes so an older failure cannot roll back a newer value', async () => {
+    let current = makePrefs({ sfx: 80 });
+    let rejectFirst: ((error: Error) => void) | undefined;
+    const firstUpdate = new Promise<void>((_resolve, reject) => {
+      rejectFirst = reject;
+    });
+    let updateCount = 0;
+    const store: AudioPrefsStore & {
+      get: ReturnType<typeof vi.fn>;
+      update: ReturnType<typeof vi.fn>;
+    } = {
+      get: vi.fn(async () => current),
+      update: vi.fn(async (patch: { audioVolumes: Record<string, number> }) => {
+        updateCount += 1;
+        if (updateCount === 1) return firstUpdate;
+        current = { ...current, audioVolumes: patch.audioVolumes };
+      }),
+    };
+
+    const first = setAndPersistBusVolume('sfx', 20, store);
+    const firstRejection = expect(first).rejects.toThrow('first write failed');
+    await vi.waitFor(() => expect(store.update).toHaveBeenCalledTimes(1));
+    const second = setAndPersistBusVolume('sfx', 90, store);
+    await Promise.resolve();
+    expect(store.update).toHaveBeenCalledTimes(1);
+
+    rejectFirst?.(new Error('first write failed'));
+    await firstRejection;
+    await second;
+
+    const { setBusVolume } = await import('../src/buses');
+    expect(vi.mocked(setBusVolume)).toHaveBeenLastCalledWith('sfx', 0.9);
+    expect(current.audioVolumes.sfx).toBe(90);
   });
 });
 
@@ -235,16 +307,49 @@ describe('syncAudioPrefsFromSettings', () => {
       }),
     );
   });
+
+  it('normalizes every patched value before persistence', async () => {
+    const store = makeStore(makePrefs());
+    await syncAudioPrefsFromSettings({ music: -4, sfx: 120.4 }, BUS_NAMES, store);
+    expect(store.update).toHaveBeenCalledWith(
+      expect.objectContaining({ audioVolumes: expect.objectContaining({ music: 0, sfx: 100 }) }),
+    );
+  });
+
+  it('falls back to defaultVolume100 for a bus missing from both the store and the patch', async () => {
+    const store = makeStore(makePrefs({ master: 80 }));
+    const { setBusVolume } = await import('../src/buses');
+    await syncAudioPrefsFromSettings({}, ['master', 'voice'], store, 40);
+    expect(vi.mocked(setBusVolume)).toHaveBeenCalledWith('voice', 0.4);
+  });
 });
 
 describe('registerFocusLossMute', () => {
+  it('always removes the focus-loss mute layer on focus', async () => {
+    const store = makeStore(makePrefs({}, { muteOnFocusLoss: true }));
+    registerFocusLossMute(true, store, BUS_NAMES);
+
+    window.dispatchEvent(new Event('blur'));
+    // Simulate the user disabling the pref while the tab was backgrounded.
+    await store.update({ audioVolumes: (await store.get()).audioVolumes });
+    vi.mocked(store.get).mockResolvedValueOnce(makePrefs({}, { muteOnFocusLoss: false }));
+
+    const { muteBus } = await import('../src/buses');
+    vi.mocked(muteBus).mockClear();
+    window.dispatchEvent(new Event('focus'));
+    await new Promise((r) => setTimeout(r, 10));
+
+    const muteFalseCalls = vi.mocked(muteBus).mock.calls.filter(([, m]) => m === false);
+    expect(muteFalseCalls.length).toBeGreaterThanOrEqual(BUS_NAMES.length);
+  });
+
   it('mutes all buses on window blur and restores on focus if still enabled', async () => {
     const store = makeStore(makePrefs({}, { muteOnFocusLoss: true }));
     registerFocusLossMute(true, store, BUS_NAMES);
 
     window.dispatchEvent(new Event('blur'));
     const { muteBus } = await import('../src/buses');
-    let muteTrueCalls = vi.mocked(muteBus).mock.calls.filter(([, m]) => m === true);
+    const muteTrueCalls = vi.mocked(muteBus).mock.calls.filter(([, m]) => m === true);
     expect(muteTrueCalls.length).toBeGreaterThanOrEqual(BUS_NAMES.length);
 
     vi.mocked(muteBus).mockClear();
@@ -263,5 +368,33 @@ describe('registerFocusLossMute', () => {
     vi.mocked(muteBus).mockClear();
     window.dispatchEvent(new Event('blur'));
     expect(muteBus).not.toHaveBeenCalled();
+  });
+
+  it('restores focus-loss mute without reading persistence on the focus event', async () => {
+    const warning = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const store: AudioPrefsStore = {
+      get: vi.fn().mockRejectedValue(new Error('store unavailable')),
+      update: vi.fn().mockResolvedValue(undefined),
+    };
+    registerFocusLossMute(true, store, BUS_NAMES);
+
+    window.dispatchEvent(new Event('focus'));
+    await new Promise((r) => setTimeout(r, 10));
+
+    expect(store.get).not.toHaveBeenCalled();
+    expect(warning).not.toHaveBeenCalled();
+    warning.mockRestore();
+  });
+
+  it('does nothing when re-enabled while already registered', () => {
+    const store = makeStore(makePrefs({}, { muteOnFocusLoss: true }));
+    registerFocusLossMute(true, store, BUS_NAMES);
+    // Second enable call while already registered must be a no-op — it must
+    // not throw or double-register listeners.
+    expect(() => registerFocusLossMute(true, store, BUS_NAMES)).not.toThrow();
+  });
+
+  it('does nothing when enabled without a store or bus list', () => {
+    expect(() => registerFocusLossMute(true)).not.toThrow();
   });
 });

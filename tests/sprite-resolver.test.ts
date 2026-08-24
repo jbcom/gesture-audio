@@ -16,6 +16,8 @@ const howlerState = vi.hoisted(() => ({
     play: ReturnType<typeof vi.fn>;
     stop: ReturnType<typeof vi.fn>;
     volume: ReturnType<typeof vi.fn>;
+    once: ReturnType<typeof vi.fn>;
+    off: ReturnType<typeof vi.fn>;
     unload: ReturnType<typeof vi.fn>;
   }>,
   nextSoundId: 1,
@@ -28,6 +30,8 @@ vi.mock('howler', () => {
     play: ReturnType<typeof vi.fn>;
     stop: ReturnType<typeof vi.fn>;
     volume: ReturnType<typeof vi.fn>;
+    once: ReturnType<typeof vi.fn>;
+    off: ReturnType<typeof vi.fn>;
     unload: ReturnType<typeof vi.fn>;
 
     constructor(_opts: {
@@ -49,11 +53,15 @@ vi.mock('howler', () => {
       const unload = vi.fn(() => {
         s.unloadCalled = true;
       });
+      const once = vi.fn();
+      const off = vi.fn();
       this.play = play;
       this.stop = stop;
       this.volume = volume;
+      this.once = once;
+      this.off = off;
       this.unload = unload;
-      s.instances.push({ play, stop, volume, unload });
+      s.instances.push({ play, stop, volume, once, off, unload });
     }
   }
 
@@ -150,12 +158,80 @@ describe('initSpriteResolver', () => {
     expect(cues['ring-bell']).toBeDefined();
   });
 
+  it('preserves prototype-named cues as ordinary own properties', async () => {
+    const map = JSON.parse(
+      '{"constructor":{"start_ms":0,"end_ms":100,"file":"ui/sprite"},"__proto__":{"start_ms":100,"end_ms":200,"file":"ui/sprite"}}',
+    ) as unknown;
+    mockFetchWith(map);
+    await initSpriteResolver({ strict: true });
+    const cues = _getCueMap();
+    expect(Object.hasOwn(cues, 'constructor')).toBe(true);
+    expect(Object.hasOwn(cues, '__proto__')).toBe(true);
+  });
+
   it('is idempotent — calling twice does not rebuild Howls', async () => {
     mockFetchWith(FLAT_SPRITE_MAP);
     await initSpriteResolver();
     const instancesAfterFirst = howlerState.instances.length;
     await initSpriteResolver();
     expect(howlerState.instances.length).toBe(instancesAfterFirst);
+  });
+
+  it('shares one in-flight fetch across concurrent initialization calls', async () => {
+    let resolveFetch: ((value: unknown) => void) | undefined;
+    const fetchPromise = new Promise((resolve) => {
+      resolveFetch = resolve;
+    });
+    const fetchMock = vi.fn(() => fetchPromise);
+    vi.stubGlobal('fetch', fetchMock);
+
+    const first = initSpriteResolver();
+    const second = initSpriteResolver();
+    resolveFetch?.({ ok: true, status: 200, json: () => Promise.resolve(FLAT_SPRITE_MAP) });
+    await Promise.all([first, second]);
+
+    expect(fetchMock).toHaveBeenCalledOnce();
+    expect(howlerState.instances).toHaveLength(2);
+  });
+
+  it('does not resurrect resolver state when disposed during initialization', async () => {
+    let resolveFetch: ((value: unknown) => void) | undefined;
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(
+        () =>
+          new Promise((resolve) => {
+            resolveFetch = resolve;
+          }),
+      ),
+    );
+    const initializing = initSpriteResolver();
+    disposeSpriteResolver();
+    resolveFetch?.({ ok: true, status: 200, json: () => Promise.resolve(FLAT_SPRITE_MAP) });
+    await initializing;
+    expect(_getCueMap()).toEqual({});
+    expect(howlerState.unloadCalled).toBe(true);
+  });
+
+  it('rejects different options after initialization instead of silently ignoring them', async () => {
+    mockFetchWith(FLAT_SPRITE_MAP);
+    await initSpriteResolver();
+    await expect(initSpriteResolver({ audioBaseUrl: '/other' })).rejects.toThrow(/dispose/);
+  });
+
+  it('strict mode rejects malformed maps and remains retryable', async () => {
+    mockFetchWith({ broken: { start_ms: 10, end_ms: 5, file: '' } });
+    await expect(initSpriteResolver({ strict: true })).rejects.toThrow(/Invalid sprite map/);
+    mockFetchWith(FLAT_SPRITE_MAP);
+    await expect(initSpriteResolver({ strict: true })).resolves.toBeUndefined();
+  });
+
+  it('validates resolver options before fetching', async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal('fetch', fetchMock);
+    await expect(initSpriteResolver({ formats: [] })).rejects.toThrow(/formats/);
+    await expect(initSpriteResolver({ spriteMapUrl: '' })).rejects.toThrow(/spriteMapUrl/);
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 
   it('gracefully handles missing sprite-map.json (resolves, no cues)', async () => {
@@ -190,6 +266,31 @@ describe('initSpriteResolver', () => {
     expect(opts.formats).toEqual(['webm', 'm4a']);
     expect(opts.audioBaseUrl).toBe('/audio');
   });
+
+  it('treats a primitive sprite-map response as empty', async () => {
+    mockFetchWith('not-an-object');
+    await initSpriteResolver();
+    expect(Object.keys(_getCueMap())).toHaveLength(0);
+  });
+
+  it('treats a null sprite-map response as empty', async () => {
+    mockFetchWith(null);
+    await initSpriteResolver();
+    expect(Object.keys(_getCueMap())).toHaveLength(0);
+  });
+
+  it('skips non-object values when flattening a nested sprite map', async () => {
+    mockFetchWith({
+      'ui/sprite': { 'drawer-open': { start_ms: 0, end_ms: 450, file: 'ui/sprite' } },
+      // A stray primitive value alongside real sprite-file entries must be
+      // skipped rather than throwing while flattening.
+      'not-a-sprite-file': 'unexpected string value',
+    });
+    await initSpriteResolver();
+    const cues = _getCueMap();
+    expect(cues['drawer-open']).toBeDefined();
+    expect(Object.keys(cues)).toHaveLength(1);
+  });
 });
 
 describe('playCue', () => {
@@ -209,8 +310,24 @@ describe('playCue', () => {
     expect(id).toBeGreaterThan(0);
   });
 
+  it('applies full volume by default when no master bus has been designated', () => {
+    playCue('drawer-open', 'sfx');
+    const volCall = howlerState.volumeArgs.at(-1);
+    expect(volCall?.[0]).toBe(1);
+  });
+
   it('returns -1 for unknown cue', () => {
     expect(playCue('nonexistent-cue', 'sfx')).toBe(-1);
+  });
+
+  it('warns and returns -1 when called before initSpriteResolver()', () => {
+    disposeSpriteResolver();
+    const warning = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    expect(playCue('drawer-open', 'sfx')).toBe(-1);
+    expect(warning).toHaveBeenCalledWith(
+      '[gesture-audio/sprite-resolver] resolver not initialised; call initSpriteResolver() first',
+    );
+    warning.mockRestore();
   });
 
   it('calls Howl.play with the cue name', () => {
@@ -281,6 +398,33 @@ describe('bus volume and mute', () => {
     expect(() => setResolverVolume('sfx', -0.5)).not.toThrow();
   });
 
+  it('updates the volume of sounds that are already playing', () => {
+    const id = playCue('drawer-open', 'sfx');
+    setResolverVolume('sfx', 0.25);
+    expect(howlerState.volumeArgs.at(-1)).toEqual([0.25, id]);
+    setResolverMute('sfx', true);
+    expect(howlerState.volumeArgs.at(-1)).toEqual([0, id]);
+  });
+
+  it('removes active-sound tracking and sibling listeners when playback ends', () => {
+    const id = playCue('drawer-open', 'sfx');
+    const instance = howlerState.instances[0];
+    const endRegistration = instance?.once.mock.calls.find(([event]) => event === 'end');
+    const cleanup = endRegistration?.[1] as (() => void) | undefined;
+    expect(cleanup).toBeTypeOf('function');
+    cleanup?.();
+    const volumeCallsAfterCleanup = howlerState.volumeArgs.length;
+    setResolverVolume('sfx', 0.4);
+    expect(howlerState.volumeArgs).toHaveLength(volumeCallsAfterCleanup);
+    expect(instance?.off).toHaveBeenCalledWith('end', cleanup, id);
+    expect(instance?.off).toHaveBeenCalledWith('stop', cleanup, id);
+    expect(instance?.off).toHaveBeenCalledWith('playerror', cleanup, id);
+  });
+
+  it('rejects non-finite volume values', () => {
+    expect(() => setResolverVolume('sfx', Number.NaN)).toThrow(/finite/);
+  });
+
   it('muted sfx bus causes zero volume on play', () => {
     setResolverMute('sfx', true);
     playCue('drawer-open', 'sfx');
@@ -313,5 +457,13 @@ describe('bus volume and mute', () => {
     const volCall = howlerState.volumeArgs.at(-1);
     expect(volCall?.[0]).toBeGreaterThan(0);
     setResolverMute('master', false);
+  });
+
+  it('defaults the master bus to full volume when a master bus is designated but no volume was ever set for it', () => {
+    setResolverMasterBus('unconfigured-master');
+    setResolverVolume('sfx', 1);
+    playCue('drawer-open', 'sfx');
+    const volCall = howlerState.volumeArgs.at(-1);
+    expect(volCall?.[0]).toBe(1);
   });
 });

@@ -9,8 +9,8 @@
  * Volume mapping: preferences store 0–100 int; buses expect 0–1 linear.
  */
 
-import { muteBus, setBusVolume } from './buses.js';
-import { setResolverMute, setResolverVolume } from './sprite-resolver.js';
+import { _setBusMuteReason, muteBus, setBusVolume } from './buses.js';
+import { _setResolverMuteReason, setResolverMute, setResolverVolume } from './sprite-resolver.js';
 
 export interface AudioPrefsSnapshot {
   /** bus name → 0–100 int volume */
@@ -31,6 +31,50 @@ export interface AudioPrefsStore {
   update(patch: { audioVolumes: Record<string, number> }): Promise<void>;
 }
 
+const FOCUS_MUTE_REASON = 'focus-loss';
+const PREFERENCE_MUTE_REASON = 'preferences-mute-all';
+const _storeUpdateQueues = new WeakMap<AudioPrefsStore, Promise<void>>();
+
+async function withStoreUpdateLock<T>(
+  store: AudioPrefsStore,
+  operation: () => Promise<T>,
+): Promise<T> {
+  const previous = _storeUpdateQueues.get(store) ?? Promise.resolve();
+  const result = previous.then(operation);
+  const settled = result.then(
+    () => undefined,
+    () => undefined,
+  );
+  _storeUpdateQueues.set(store, settled);
+  try {
+    return await result;
+  } finally {
+    if (_storeUpdateQueues.get(store) === settled) _storeUpdateQueues.delete(store);
+  }
+}
+
+function normalizeVolume100(value: number, label: string): number {
+  if (!Number.isFinite(value)) throw new TypeError(`${label} must be a finite number`);
+  return Math.round(Math.max(0, Math.min(100, value)));
+}
+
+function validateDefaultVolume(value: number): number {
+  return normalizeVolume100(value, 'defaultVolume100');
+}
+
+function validateSnapshot(value: AudioPrefsSnapshot): AudioPrefsSnapshot {
+  if (
+    !value ||
+    typeof value !== 'object' ||
+    !value.audioVolumes ||
+    typeof value.audioVolumes !== 'object' ||
+    Array.isArray(value.audioVolumes)
+  ) {
+    throw new TypeError('AudioPrefsStore.get() must return an object with an audioVolumes map');
+  }
+  return value;
+}
+
 /**
  * Apply persisted audio preferences to the live audio engine.
  * Call once on startup after buses are built and user gesture received.
@@ -44,22 +88,18 @@ export async function applyPersistedAudioPrefs(
   busNames: readonly string[],
   defaultVolume100 = 75,
 ): Promise<void> {
-  const prefs = await store.get();
+  const prefs = validateSnapshot(await store.get());
   const { audioVolumes } = prefs;
+  const fallback = validateDefaultVolume(defaultVolume100);
 
   for (const bus of busNames) {
-    const vol = (audioVolumes[bus] ?? defaultVolume100) / 100;
+    const vol = normalizeVolume100(audioVolumes[bus] ?? fallback, `audioVolumes.${bus}`) / 100;
     setBusVolume(bus, vol, 0); // instant on startup — no ramp
     setResolverVolume(bus, vol);
   }
 
-  if (prefs.muteOnFocusLoss) {
-    registerFocusLossMute(true, store, busNames);
-  }
-
-  if (prefs.muteAll) {
-    _muteAll(busNames, true);
-  }
+  registerFocusLossMute(Boolean(prefs.muteOnFocusLoss), store, busNames);
+  _setMuteReasonForAll(busNames, PREFERENCE_MUTE_REASON, Boolean(prefs.muteAll));
 }
 
 /**
@@ -75,13 +115,21 @@ export async function setAndPersistBusVolume(
   vol100: number,
   store: AudioPrefsStore,
 ): Promise<void> {
-  const linear = Math.max(0, Math.min(100, vol100)) / 100;
-  setBusVolume(bus, linear);
-  setResolverVolume(bus, linear);
+  const persisted = normalizeVolume100(vol100, 'vol100');
+  const linear = persisted / 100;
+  await withStoreUpdateLock(store, async () => {
+    const prefs = validateSnapshot(await store.get());
+    const previous = normalizeVolume100(prefs.audioVolumes[bus] ?? 75, `audioVolumes.${bus}`) / 100;
+    setBusVolume(bus, linear);
+    setResolverVolume(bus, linear);
 
-  const prefs = await store.get();
-  await store.update({
-    audioVolumes: { ...prefs.audioVolumes, [bus]: Math.round(vol100) },
+    try {
+      await store.update({ audioVolumes: { ...prefs.audioVolumes, [bus]: persisted } });
+    } catch (error) {
+      setBusVolume(bus, previous);
+      setResolverVolume(bus, previous);
+      throw error;
+    }
   });
 }
 
@@ -105,16 +153,38 @@ export async function syncAudioPrefsFromSettings(
   store: AudioPrefsStore,
   defaultVolume100 = 75,
 ): Promise<void> {
-  const prefs = await store.get();
-  const merged = { ...prefs.audioVolumes, ...audioVolumes };
+  const fallback = validateDefaultVolume(defaultVolume100);
+  const normalizedPatch = Object.fromEntries(
+    Object.entries(audioVolumes).map(([bus, value]) => [
+      bus,
+      normalizeVolume100(value, `audioVolumes.${bus}`),
+    ]),
+  );
+  await withStoreUpdateLock(store, async () => {
+    const prefs = validateSnapshot(await store.get());
+    const merged = { ...prefs.audioVolumes, ...normalizedPatch };
+    const previousVolumes = new Map<string, number>();
 
-  for (const bus of busNames) {
-    const vol = (merged[bus] ?? defaultVolume100) / 100;
-    setBusVolume(bus, vol);
-    setResolverVolume(bus, vol);
-  }
+    for (const bus of busNames) {
+      previousVolumes.set(
+        bus,
+        normalizeVolume100(prefs.audioVolumes[bus] ?? fallback, `audioVolumes.${bus}`) / 100,
+      );
+      const vol = normalizeVolume100(merged[bus] ?? fallback, `audioVolumes.${bus}`) / 100;
+      setBusVolume(bus, vol);
+      setResolverVolume(bus, vol);
+    }
 
-  await store.update({ audioVolumes: merged });
+    try {
+      await store.update({ audioVolumes: merged });
+    } catch (error) {
+      for (const [bus, volume] of previousVolumes) {
+        setBusVolume(bus, volume);
+        setResolverVolume(bus, volume);
+      }
+      throw error;
+    }
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -124,21 +194,22 @@ export async function syncAudioPrefsFromSettings(
 let _focusListenersRegistered = false;
 let _focusBlurHandler: (() => void) | null = null;
 let _focusRestoreHandler: (() => void) | null = null;
+let _focusBusNames: readonly string[] = [];
 
-function _muteAll(busNames: readonly string[], muted: boolean): void {
+function _setMuteReasonForAll(busNames: readonly string[], reason: string, muted: boolean): void {
   for (const bus of busNames) {
-    muteBus(bus, muted);
-    setResolverMute(bus, muted);
+    _setBusMuteReason(bus, reason, muted);
+    _setResolverMuteReason(bus, reason, muted);
   }
 }
 
 /**
- * Register (or tear down) window blur/focus listeners that mute all buses
- * while the tab/app is backgrounded, restoring on focus IF the store still
- * reports `muteOnFocusLoss: true` at that time.
+ * Register (or tear down) window blur/focus listeners that apply an independent
+ * focus-loss mute layer while the tab/app is backgrounded. Focus or teardown
+ * always removes only that layer, preserving manual/global mutes.
  *
  * @param enabled - true to register, false to remove existing listeners
- * @param store   - required when enabled=true (re-checked on focus)
+ * @param store   - required when enabled=true for API compatibility with the preference bridge
  * @param busNames - buses to mute/unmute; required when enabled=true
  */
 export function registerFocusLossMute(
@@ -147,6 +218,7 @@ export function registerFocusLossMute(
   busNames?: readonly string[],
 ): void {
   if (!enabled) {
+    _setMuteReasonForAll(_focusBusNames, FOCUS_MUTE_REASON, false);
     if (_focusListenersRegistered && typeof window !== 'undefined') {
       if (_focusBlurHandler) window.removeEventListener('blur', _focusBlurHandler);
       if (_focusRestoreHandler) window.removeEventListener('focus', _focusRestoreHandler);
@@ -154,25 +226,23 @@ export function registerFocusLossMute(
     _focusListenersRegistered = false;
     _focusBlurHandler = null;
     _focusRestoreHandler = null;
+    _focusBusNames = [];
     return;
   }
 
-  if (_focusListenersRegistered || typeof window === 'undefined' || !store || !busNames) return;
+  if (typeof window === 'undefined' || !store || !busNames || busNames.length === 0) return;
+  if (_focusListenersRegistered) {
+    const unchanged =
+      busNames.length === _focusBusNames.length &&
+      busNames.every((name, index) => name === _focusBusNames[index]);
+    if (unchanged) return;
+    registerFocusLossMute(false);
+  }
   _focusListenersRegistered = true;
+  _focusBusNames = [...busNames];
 
-  _focusBlurHandler = () => _muteAll(busNames, true);
-  _focusRestoreHandler = () => {
-    store
-      .get()
-      .then((prefs) => {
-        if (prefs.muteOnFocusLoss) {
-          _muteAll(busNames, false);
-        }
-      })
-      .catch(() => {
-        console.warn('[audio-engine/preferences] Could not restore focus-loss mute state');
-      });
-  };
+  _focusBlurHandler = () => _setMuteReasonForAll(_focusBusNames, FOCUS_MUTE_REASON, true);
+  _focusRestoreHandler = () => _setMuteReasonForAll(_focusBusNames, FOCUS_MUTE_REASON, false);
 
   window.addEventListener('blur', _focusBlurHandler);
   window.addEventListener('focus', _focusRestoreHandler);

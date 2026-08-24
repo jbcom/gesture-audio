@@ -1,0 +1,9 @@
+node_modules/
+dist/
+coverage/
+*.tgz
+.DS_Store
+docs-site/dist/
+docs-site/.astro/
+# starlight-typedoc regenerates this on every build.
+docs-site/src/content/docs/reference/

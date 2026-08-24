@@ -16,8 +16,12 @@
     "noUnusedLocals": true,
     "noUnusedParameters": true,
     "forceConsistentCasingInFileNames": true,
+    "paths": {
+      "@jbdevprimary/gesture-audio": ["./src/index.ts"],
+      "@jbdevprimary/gesture-audio/build-tools": ["./src/build-tools/index.ts"]
+    },
     "types": ["node", "vitest/globals"]
   },
-  "include": ["src/**/*", "tests/**/*"],
+  "include": ["src/**/*", "tests/**/*", "examples/**/*"],
   "exclude": ["node_modules", "dist"]
 }

@@ -1,0 +1,12 @@
+# Local dev only — CI uses the official actions/setup-node and
+# pnpm/action-setup actions instead (see .github/workflows/*.yml). Both mise
+# and those actions resolve from the same two idiomatic files, so no version
+# is duplicated anywhere:
+#   - Node version:  .nvmrc      (actions/setup-node's node-version-file)
+#   - pnpm version:  package.json #packageManager (pnpm/action-setup's default)
+[tools]
+node = "24" # placeholder; idiomatic_version_file_enable_tools resolves the
+            # real version from .nvmrc
+
+[settings]
+idiomatic_version_file_enable_tools = ["node", "pnpm"]

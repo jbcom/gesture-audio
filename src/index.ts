@@ -1,5 +1,5 @@
 /**
- * @arcade-cabinet/audio-engine — public API.
+ * @jbdevprimary/gesture-audio — public API.
  *
  * Tone.js owns the bus graph (master → limiter → destination, plus caller-
  * named sub-buses). Howler owns sample playback purely as a sprite-based
@@ -11,6 +11,7 @@
 
 // Bus topology (Tone.js)
 export {
+  _getMasterBusName,
   type AudioBuses,
   type Bus,
   buildBuses,
@@ -19,15 +20,14 @@ export {
   getBuses,
   muteBus,
   setBusVolume,
-  _getMasterBusName,
 } from './buses.js';
 
 // Gesture-gated lifecycle
 export {
+  _resetAudioEngine,
   isAudioEngineStarted,
   registerAudioGestureTrigger,
   startAudioEngine,
-  _resetAudioEngine,
 } from './init.js';
 
 // Preferences bridge
@@ -48,6 +48,8 @@ export type {
   SpriteResolverOptions,
 } from './sprite-resolver.js';
 export {
+  _getCueMap,
+  _getLastResolverOptions,
   disposeSpriteResolver,
   initSpriteResolver,
   playCue,
@@ -55,6 +57,4 @@ export {
   setResolverMute,
   setResolverVolume,
   stopCue,
-  _getCueMap,
-  _getLastResolverOptions,
 } from './sprite-resolver.js';

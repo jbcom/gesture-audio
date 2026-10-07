@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it, vi } from 'vitest';
 
-const workflow = readFileSync('.github/workflows/ci.yml', 'utf8');
+const workflow = readFileSync('.github/workflows/ci.yml', 'utf8').replace(/\r\n/g, '\n');
 const policy = workflow.split('  repository-policy:\n')[1]?.split('  verify:\n')[0] ?? '';
 const source = (policy.split('          script: |\n')[1] ?? '')
   .split('\n')

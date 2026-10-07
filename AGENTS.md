@@ -21,8 +21,9 @@ Use Node.js 22, 24 and 26 and pnpm. Support follows maintained lines with
 Node 26 is the default. Run `mise install` (reads `.nvmrc` and
 `package.json#packageManager` — see `mise.toml`) rather than a global pnpm
 install or `corepack enable`. CI uses the official `actions/setup-node` and
-`pnpm/action-setup` actions instead of mise, reading those same two files —
-mise is a local-only convenience, not a CI dependency.
+`pnpm/action-setup` actions instead of mise. CI selects maintained Node majors
+and reads the pnpm version from `package.json#packageManager`; mise is a
+local-only convenience, not a CI dependency.
 
 ## Source of truth
 

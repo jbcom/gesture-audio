@@ -45,7 +45,7 @@ Notable changes to this project are recorded here. The format follows
 
 ### Features
 
-* **audio-engine:** extract @arcade-cabinet/audio-engine package ([#1](https://github.com/jbcom/gesture-audio/issues/1)) ([2d31b6b](https://github.com/jbcom/gesture-audio/commit/2d31b6b4b352655b48d800a17d44e1f177a863fb))
+* **audio-engine:** add reusable audio engine package ([#1](https://github.com/jbcom/gesture-audio/issues/1)) ([2d31b6b](https://github.com/jbcom/gesture-audio/commit/2d31b6b4b352655b48d800a17d44e1f177a863fb))
 * **ci:** add trusted SonarQube Cloud quality gate ([1dd7a73](https://github.com/jbcom/gesture-audio/commit/1dd7a73e832c0b1f357914f0e321971c33c720ed))
 * migrate documentation and agentic repository controls ([4c2bc8a](https://github.com/jbcom/gesture-audio/commit/4c2bc8afb6828351fa2a304d127ede9fc7311f4e))
 * migrate documentation and agentic repository controls ([3b3ac82](https://github.com/jbcom/gesture-audio/commit/3b3ac82bd947db49ae89a7e78d50eaeeaffbb324))

@@ -1,6 +1,5 @@
 /**
- * verify-sprites — generic audio-asset CI verifier, extracted from
- * on-the-ropes' src/build-tools/audio-verify/index.ts.
+ * verify-sprites — generic audio-asset CI verifier.
  *
  * Checks, given a `public/audio`-style directory and a manifest of expected
  * content:
@@ -20,7 +19,7 @@
  * baked in here.
  *
  * Requires `ffprobe`/`ffmpeg` on PATH for duration + LUFS checks (skippable
- * via `fast: true`, which matches the source's `--fast` CI flag).
+ * via `fast: true` or the CLI's `--fast` flag).
  */
 
 import { spawnSync } from 'node:child_process';

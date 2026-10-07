@@ -98,7 +98,7 @@ Full invariants and error policy: `docs/architecture.md`.
   `jonbogaty.com` custom domain — no cross-repo push is involved.
 
 All GitHub Actions are pinned to exact commit SHAs (with a `# vX.Y.Z` comment)
-per the fleet's supply-chain convention. Resolve a new SHA with `gh api
+for supply-chain integrity. Resolve a new SHA with `gh api
 repos/<owner>/<repo>/git/ref/tags/<tag>` rather than trusting training data or
 hand-typing one.
 

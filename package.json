@@ -1,6 +1,6 @@
 {
   "name": "gesture-audio",
-  "version": "0.2.3",
+  "version": "0.2.4",
   "description": "Gesture-gated Tone.js bus graph + Howler sprite resolver + preferences bridge. Solves browser autoplay unlock.",
   "type": "module",
   "license": "MIT",

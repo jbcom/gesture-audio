@@ -13,6 +13,7 @@ const documents = [
   'docs/api-reference.md',
   'docs/changelog.md',
   'docs/contributing.md',
+  'docs/decisions.md',
   'docs/index.md',
   'docs/integration.md',
   'docs/quick-start.md',

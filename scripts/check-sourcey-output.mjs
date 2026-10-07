@@ -8,6 +8,7 @@ const required = [
   'integration/index.html',
   'api-reference/index.html',
   'architecture/index.html',
+  'decisions/index.html',
   'sitemap.xml',
   'llms.txt',
   'llms-full.txt',
@@ -29,6 +30,8 @@ const requiredText = [
   ['sitemap.xml', sitemap, 'https://jonbogaty.com/gesture-audio/quick-start/'],
   ['sitemap.xml', sitemap, 'https://jonbogaty.com/gesture-audio/integration/'],
   ['llms.txt', llms, '/quick-start/'],
+  ['llms.txt', llms, '/decisions/'],
+  ['sitemap.xml', sitemap, 'https://jonbogaty.com/gesture-audio/decisions/'],
 ];
 
 for (const [file, contents, expected] of requiredText) {

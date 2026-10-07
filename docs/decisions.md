@@ -14,6 +14,12 @@ Local development defaults to Node 26. Documentation and deployment jobs use
 `CI / gate` aggregates every job in the CI workflow and rejects failure or
 cancellation while accepting successful or intentionally skipped jobs.
 
+The trusted policy job reports `Repository Policy / gate` directly against
+the PR head commit. Its job name differs from that required status, so an
+intentionally skipped validation job cannot satisfy the trusted policy.
+Fork changes to the ruleset administration script are protected alongside
+other control-plane files.
+
 `scripts/apply-branch-ruleset.mjs` is the canonical repository ruleset script.
 Its omitted arguments default to `gesture-audio` and
 `CI / gate;title;Repository Policy / gate;Dependency Review / gate`.

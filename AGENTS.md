@@ -70,7 +70,9 @@ Full invariants and error policy: `docs/architecture.md`.
 
 ## Testing
 
-- `tests/*.test.ts` mirror `src/*.ts` one-to-one; `tests/verify-sprites.test.ts`
+- Runtime tests mirror the source modules; `tests/repository-policy.test.ts`
+  verifies trusted CI status identity, protected paths, renames, and API errors.
+  `tests/verify-sprites.test.ts`
   uses real temporary audio when `ffmpeg`/`ffprobe` are on `PATH` and falls
   back to structural-only checks when they are not.
 - `pnpm coverage` enforces coverage thresholds (see `vitest.config.ts`). Do

@@ -52,6 +52,8 @@ intentional public API break.
 - `tests/preferences-bridge.test.ts` covers persistence and mute layers.
 - `tests/verify-sprites.test.ts` uses real temporary audio when ffmpeg is
   available and keeps structural checks portable when it is not.
+- `tests/repository-policy.test.ts` evaluates the trusted policy script with
+  mocked GitHub APIs, including protected changes, renames, and API errors.
 
 Coverage thresholds are enforced by `pnpm coverage`. Do not add exclusions for
 ordinary error paths; test observable behavior through the public API.

@@ -10,7 +10,8 @@ npm install gesture-audio tone howler
 ```
 
 `tone` and `howler` are peer dependencies, so the application chooses their
-versions. Node 22 or newer is required for development tooling.
+versions. Node.js 22, 24 and 26 are supported for development tooling
+(`engines.node: >=22`); no exact patch release is required.
 
 ## Bootstrap after a gesture
 

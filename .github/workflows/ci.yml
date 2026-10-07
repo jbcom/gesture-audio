@@ -114,6 +114,10 @@ jobs:
     if: github.event_name != 'pull_request_target'
     runs-on: ubuntu-24.04
     timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        node: ["22", "24", "26"]
     steps:
       - name: Validation intentionally bypassed for vetted maintenance PR
         if: needs.classify.outputs.skip-validation == 'true'
@@ -123,14 +127,13 @@ jobs:
         with:
           persist-credentials: false
       # pnpm/action-setup reads the version from package.json#packageManager;
-      # setup-node reads .nvmrc — the same two files mise.toml points local
-      # dev at, so no version is duplicated between local and CI.
+      # setup-node tests every supported major, independently of the local default.
       - if: needs.classify.outputs.skip-validation != 'true'
         uses: pnpm/action-setup@ff378ebe6b225b0680b81c1ad4498ae0d1d3a5e3 # v6.0.10
       - if: needs.classify.outputs.skip-validation != 'true'
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
-          node-version-file: '.nvmrc'
+          node-version: ${{ matrix.node }}
           cache: 'pnpm'
       - if: needs.classify.outputs.skip-validation != 'true'
         run: pnpm install --frozen-lockfile
@@ -209,7 +212,7 @@ jobs:
       - if: needs.classify.outputs.skip-validation != 'true'
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
-          node-version-file: '.nvmrc'
+          node-version: 'lts/*'
           cache: 'pnpm'
       - if: needs.classify.outputs.skip-validation != 'true'
         run: pnpm install --frozen-lockfile
@@ -262,7 +265,7 @@ jobs:
       - if: needs.classify.outputs.skip-validation != 'true'
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
-          node-version-file: '.nvmrc'
+          node-version: 'lts/*'
           cache: 'pnpm'
       - if: needs.classify.outputs.skip-validation != 'true'
         run: pnpm install --frozen-lockfile
@@ -277,3 +280,23 @@ jobs:
         uses: SonarSource/sonarqube-scan-action@22918119ff8e1ca75a623e15c8296b6ea4fbe28f # v8.2.1
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+
+  gate:
+    name: CI / gate
+    needs: [classify, repository-policy, verify, compatibility, docs, dependency-review, sonarcloud]
+    if: always()
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Require every CI job to succeed or skip
+        env:
+          NEEDS_JSON: ${{ toJSON(needs) }}
+        run: |
+          node --input-type=module -e '
+            const jobs = JSON.parse(process.env.NEEDS_JSON);
+            for (const [name, { result }] of Object.entries(jobs)) {
+              if (!["success", "skipped"].includes(result)) {
+                console.error(`${name}: ${result}`);
+                process.exitCode = 1;
+              }
+            }
+          '

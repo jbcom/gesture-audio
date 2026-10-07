@@ -16,11 +16,14 @@ The package treats unlock and application bootstrap as one concurrent-safe,
 retryable transaction. It does not define cue names, gameplay policy, or a
 persistence framework — those stay in the consuming application.
 
-Use Node 22+ and pnpm. Locally, run `mise install` (reads `.nvmrc` and
+Use Node.js 22, 24 and 26 and pnpm. Support follows maintained lines with
+`engines.node: >=22`; no hook or script requires an exact patch. Locally,
+Node 26 is the default. Run `mise install` (reads `.nvmrc` and
 `package.json#packageManager` — see `mise.toml`) rather than a global pnpm
 install or `corepack enable`. CI uses the official `actions/setup-node` and
-`pnpm/action-setup` actions instead of mise, reading those same two files —
-mise is a local-only convenience, not a CI dependency.
+`pnpm/action-setup` actions instead of mise. CI selects maintained Node majors
+and reads the pnpm version from `package.json#packageManager`; mise is a
+local-only convenience, not a CI dependency.
 
 ## Source of truth
 

@@ -9,7 +9,7 @@ verifier only from `gesture-audio/build-tools`.
 | Entry point | Intended environment | Includes |
 | --- | --- | --- |
 | `gesture-audio` | Modern browser runtime; safe to import during SSR | lifecycle, Tone bus, resolver, and preferences APIs |
-| `gesture-audio/build-tools` | Node 22+ build or CI process | audio-asset verification APIs |
+| `gesture-audio/build-tools` | Node.js 22, 24 and 26 build or CI process | audio-asset verification APIs |
 
 Underscored exports (`_resetAudioEngine`, `_getCueMap`, `_getLastResolverOptions`,
 and `_getMasterBusName`) support tests and hot reload. Do not use them as

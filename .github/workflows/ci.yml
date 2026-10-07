@@ -79,16 +79,32 @@ jobs:
         with:
           script: |
             const pr = context.payload.pull_request;
-            const report = (state, description) => github.rest.repos.createCommitStatus({
+            const statusTargets = new Set([pr.head.sha]);
+            const report = async (state, description) => {
+              for (const sha of statusTargets) await github.rest.repos.createCommitStatus({
               ...context.repo,
-              sha: pr.head.sha,
+              sha,
               context: 'Repository Policy / gate',
               state,
               description,
               target_url: `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`,
-            });
+              });
+            };
             await report('pending', 'Evaluating trusted repository policy');
             try {
+              let current;
+              for (let attempt = 0; attempt < 5; attempt++) {
+                current = (await github.rest.pulls.get({
+                  ...context.repo,
+                  pull_number: pr.number,
+                })).data;
+                if (current.head.sha !== pr.head.sha) throw new Error('PR head changed during policy evaluation');
+                if (current.merge_commit_sha) break;
+                if (attempt < 4) await new Promise((resolve) => setTimeout(resolve, 1000));
+              }
+              if (!current.merge_commit_sha) throw new Error('PR test merge commit is unavailable');
+              statusTargets.add(current.merge_commit_sha);
+              await report('pending', 'Evaluating trusted repository policy');
               if (pr.head.repo.full_name !== `${context.repo.owner}/${context.repo.repo}`) {
                 const files = await github.paginate(github.rest.pulls.listFiles, {
                   ...context.repo,
@@ -117,6 +133,13 @@ jobs:
                   core.setFailed(`External forks cannot modify trusted control-plane files: ${changed.join(', ')}`);
                   return;
                 }
+              }
+              const latest = (await github.rest.pulls.get({
+                ...context.repo,
+                pull_number: pr.number,
+              })).data;
+              if (latest.head.sha !== pr.head.sha || latest.merge_commit_sha !== current.merge_commit_sha) {
+                throw new Error('PR changed during policy evaluation');
               }
               await report('success', 'Trusted repository policy passed');
             } catch (error) {

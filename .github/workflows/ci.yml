@@ -114,6 +114,10 @@ jobs:
     if: github.event_name != 'pull_request_target'
     runs-on: ubuntu-24.04
     timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        node: ["22", "24", "26"]
     steps:
       - name: Validation intentionally bypassed for vetted maintenance PR
         if: needs.classify.outputs.skip-validation == 'true'
@@ -123,14 +127,13 @@ jobs:
         with:
           persist-credentials: false
       # pnpm/action-setup reads the version from package.json#packageManager;
-      # setup-node reads .nvmrc — the same two files mise.toml points local
-      # dev at, so no version is duplicated between local and CI.
+      # setup-node tests every supported major, independently of the local default.
       - if: needs.classify.outputs.skip-validation != 'true'
         uses: pnpm/action-setup@ff378ebe6b225b0680b81c1ad4498ae0d1d3a5e3 # v6.0.10
       - if: needs.classify.outputs.skip-validation != 'true'
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
-          node-version-file: '.nvmrc'
+          node-version: ${{ matrix.node }}
           cache: 'pnpm'
       - if: needs.classify.outputs.skip-validation != 'true'
         run: pnpm install --frozen-lockfile
@@ -209,7 +212,7 @@ jobs:
       - if: needs.classify.outputs.skip-validation != 'true'
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
-          node-version-file: '.nvmrc'
+          node-version: 'lts/*'
           cache: 'pnpm'
       - if: needs.classify.outputs.skip-validation != 'true'
         run: pnpm install --frozen-lockfile
@@ -262,7 +265,7 @@ jobs:
       - if: needs.classify.outputs.skip-validation != 'true'
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
-          node-version-file: '.nvmrc'
+          node-version: 'lts/*'
           cache: 'pnpm'
       - if: needs.classify.outputs.skip-validation != 'true'
         run: pnpm install --frozen-lockfile

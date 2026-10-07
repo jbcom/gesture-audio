@@ -29,7 +29,11 @@ persistence framework. Those remain local to the application.
 
 ## Install
 
-Node 22 or newer is required for build tooling. The runtime supports modern
+## Compatibility
+
+Node.js 22, 24 and 26 are supported for build tooling (`engines.node: >=22`).
+Support follows maintained Node lines, rather than requiring one exact patch.
+CI verifies each supported major on Ubuntu. The runtime supports modern
 browsers with Web Audio, `fetch`, and the event APIs used by Tone.js and Howler.
 
 ```sh

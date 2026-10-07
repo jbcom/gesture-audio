@@ -18,6 +18,12 @@
       "!!docs/dist"
     ]
   },
+  "overrides": [
+    {
+      "includes": ["scripts/apply-branch-ruleset.mjs"],
+      "formatter": { "enabled": false }
+    }
+  ],
   "formatter": {
     "enabled": true,
     "indentStyle": "space",

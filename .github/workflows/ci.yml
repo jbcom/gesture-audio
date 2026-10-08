@@ -93,14 +93,18 @@ jobs:
             await report('pending', 'Evaluating trusted repository policy');
             try {
               let current;
-              for (let attempt = 0; attempt < 5; attempt++) {
+              // Up to 210 seconds of backoff leaves time for reporting within the five-minute job.
+              for (let attempt = 0; attempt < 18; attempt++) {
                 current = (await github.rest.pulls.get({
                   ...context.repo,
                   pull_number: pr.number,
                 })).data;
                 if (current.head.sha !== pr.head.sha) throw new Error('PR head changed during policy evaluation');
                 if (current.merge_commit_sha) break;
-                if (attempt < 4) await new Promise((resolve) => setTimeout(resolve, 1000));
+                if (attempt < 17) {
+                  const delay = Math.min(1000 * 2 ** attempt, 15000);
+                  await new Promise((resolve) => setTimeout(resolve, delay));
+                }
               }
               if (!current.merge_commit_sha) throw new Error('PR test merge commit is unavailable');
               statusTargets.add(current.merge_commit_sha);
@@ -319,9 +323,28 @@ jobs:
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
 
+  title:
+    name: title
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 'lts/*'
+      - name: Require a Conventional Commit PR title
+        env:
+          PR_TITLE: ${{ github.event.pull_request.title }}
+        run: |
+          node --input-type=module -e '
+            if (!/^(feat|fix|docs|style|refactor|perf|test|build|ci|chore|revert)(\([^()\r\n]+\))?!?: \S.*$/.test(process.env.PR_TITLE || "")) {
+              console.error("PR title must be a Conventional Commit with a nonempty description");
+              process.exitCode = 1;
+            }
+          '
+
   gate:
     name: CI / gate
-    needs: [classify, repository-policy, verify, compatibility, docs, dependency-review, sonarcloud]
+    needs: [classify, repository-policy, verify, compatibility, docs, dependency-review, sonarcloud, title]
     if: always()
     runs-on: ubuntu-24.04
     steps:

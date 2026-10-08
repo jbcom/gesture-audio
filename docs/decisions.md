@@ -13,6 +13,8 @@ Local development defaults to Node 26. Documentation and deployment jobs use
 
 `CI / gate` aggregates every job in the CI workflow and rejects failure or
 cancellation while accepting successful or intentionally skipped jobs.
+The `title` check validates Conventional Commit PR titles and is included
+in the aggregate gate, matching the ruleset script's required-check defaults.
 
 The trusted policy job reports `Repository Policy / gate` directly against
 the PR head and current test merge commits. Its job name differs from that

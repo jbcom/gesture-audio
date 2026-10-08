@@ -20,6 +20,7 @@ async function evaluate(
     changedHead?: boolean;
     delayedMerge?: boolean;
     changedDuringRead?: boolean;
+    slowMerge?: boolean;
   } = {},
 ) {
   const createCommitStatus = vi.fn().mockResolvedValue({});
@@ -36,6 +37,11 @@ async function evaluate(
   });
   if (options.delayedMerge) {
     get.mockResolvedValueOnce({ data: { head: { sha: 'pr-head-sha' }, merge_commit_sha: null } });
+  }
+  if (options.slowMerge) {
+    for (let attempt = 0; attempt < 8; attempt++) {
+      get.mockResolvedValueOnce({ data: { head: { sha: 'pr-head-sha' }, merge_commit_sha: null } });
+    }
   }
   if (options.changedDuringRead) {
     get
@@ -62,18 +68,22 @@ async function evaluate(
     },
   };
   const run = new AsyncFunction('github', 'context', 'core', 'setTimeout', source);
+  const waits = vi.fn();
   let error: unknown;
   try {
     await run(
       { rest: { repos: { createCommitStatus }, pulls: { listFiles: vi.fn(), get } }, paginate },
       context,
       { setFailed },
-      (callback: () => void) => callback(),
+      (callback: () => void, delay: number) => {
+        waits(delay);
+        callback();
+      },
     );
   } catch (caught) {
     error = caught;
   }
-  return { createCommitStatus, paginate, setFailed, error, get };
+  return { createCommitStatus, paginate, setFailed, error, get, waits };
 }
 
 function assertReports(
@@ -160,7 +170,8 @@ describe('trusted repository policy', () => {
 
   it('fails closed when no test merge is available after bounded retries', async () => {
     const result = await evaluate([], true, false, { missingMerge: true });
-    expect(result.get).toHaveBeenCalledTimes(5);
+    expect(result.get).toHaveBeenCalledTimes(18);
+    expect(result.waits.mock.calls.reduce((total, [delay]) => total + delay, 0)).toBe(210000);
     expect(result.error).toBeInstanceOf(Error);
     assertReports(result, 'error', ['pr-head-sha']);
   });
@@ -176,5 +187,14 @@ describe('trusted repository policy', () => {
     const result = await evaluate([], false, false, { changedDuringRead: true });
     expect(result.error).toBeInstanceOf(Error);
     assertReports(result, 'error');
+  });
+
+  it('allows delayed test merge computation beyond the initial four-second window', async () => {
+    const result = await evaluate([], true, false, { slowMerge: true });
+    expect(result.get).toHaveBeenCalledTimes(10);
+    expect(result.waits.mock.calls.reduce((total, [delay]) => total + delay, 0)).toBeGreaterThan(
+      4000,
+    );
+    assertReports(result, 'success');
   });
 });

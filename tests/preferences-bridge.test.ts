@@ -406,8 +406,18 @@ describe('setTransientAudioMute', () => {
     setTransientAudioMute(['music', 'sfx'], 'cutscene', true);
     setTransientAudioMute(['music', 'sfx'], 'cutscene', false);
 
-    expect(busState.muteBusCalls).toContainEqual(['music', true]);
-    expect(busState.resolverMuteCalls).toContainEqual(['sfx', false]);
+    expect(busState.muteBusCalls).toEqual([
+      ['music', true],
+      ['sfx', true],
+      ['music', false],
+      ['sfx', false],
+    ]);
+    expect(busState.resolverMuteCalls).toEqual([
+      ['music', true],
+      ['sfx', true],
+      ['music', false],
+      ['sfx', false],
+    ]);
     expect(store.update).not.toHaveBeenCalled();
   });
 

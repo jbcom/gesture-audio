@@ -144,6 +144,29 @@ export function setAndPersistBusMute(bus: string, muted: boolean): void {
 }
 
 /**
+ * Apply or remove a named runtime-only mute layer in both engines. This never
+ * writes preferences and therefore cannot overwrite a player's manual mix.
+ */
+export function setTransientAudioMute(
+  busNames: readonly string[],
+  reason: string,
+  muted: boolean,
+): void {
+  if (typeof reason !== 'string' || reason.trim().length === 0) {
+    throw new Error('Mute reason must not be empty');
+  }
+  for (const bus of busNames) {
+    if (typeof bus !== 'string' || bus.trim().length === 0) {
+      throw new TypeError('Bus names must be non-empty strings');
+    }
+  }
+  for (const bus of busNames) {
+    _setBusMuteReason(bus, reason, muted);
+    _setResolverMuteReason(bus, reason, muted);
+  }
+}
+
+/**
  * Merge and apply a full (or partial) audioVolumes map, persisting the merge.
  * Used when a Settings panel sends multiple changed sliders at once.
  */

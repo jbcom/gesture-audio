@@ -87,15 +87,36 @@ initialization requires `disposeSpriteResolver()` first.
 
 The map can be flat (`cue → entry`) or grouped (`group → cue → entry`). Every
 entry has `start_ms`, `end_ms`, and an extensionless, traversal-safe relative
-`file` path. See
+`file` path. An entry can also declare `formats` as a readonly ordered list of
+encoded extensions and `loop: true` for an individual looping sprite. Every
+cue sharing one `file` must declare the same ordered format list (or resolve to
+the same resolver default); strict mode rejects a conflict. See
 [sprite maps](./sprite-maps.md) for examples.
 
-### `playCue(cueName, busTarget?)` and `stopCue(id)`
+### `playCue(cueName, busTarget?)` and `playCue(cueName, options?)`
 
 `playCue` starts a known cue and returns its Howler sound ID. It returns `-1`
 when the resolver is not ready, the cue is absent, or its sheet is unavailable.
-`busTarget` defaults to `sfx`. `stopCue` stops an active, non-negative ID and
-is otherwise a no-op.
+`busTarget` defaults to `sfx`; the additive options shape is
+`{ bus?, gain?, position?: readonly [x, y, z] }`. Logical `gain` is clamped to
+`0..1` and composes with current master and target-bus gains and mutes. A
+position is sent through Howler's public spatial API.
+
+`stopCue(id)` stops an active, non-negative ID and is otherwise a no-op.
+`setCueGain(id, gain)` updates one active cue's logical gain and returns whether
+the ID exists. `pauseCue(id)` pauses an active ID and returns whether it did;
+`resumeCue(id)` resumes that same ID and returns it, or `-1` when it cannot.
+`fadeCue(id, toGain, durationMs)` fades logical gain while still following live
+bus/master volume and mute changes; a pause freezes that fade. `setCuePosition`
+returns whether the ID exists after validating its position. Looping sprite IDs
+remain active between loop-end events, so these controls continue to affect
+them until stopped.
+
+### `setAudioListener(position, forward, up?)`
+
+Sets the global Howler listener with public `Howler.pos` and
+`Howler.orientation` APIs. All vectors are finite three-number tuples; `up`
+defaults to `[0, 1, 0]`.
 
 ### `setResolverVolume(bus, linear)`, `setResolverMute(bus, muted)`, and `setResolverMasterBus(bus)`
 
@@ -106,9 +127,10 @@ the bus that should globally scale/mute all Howler cues with
 
 ### `disposeSpriteResolver()`
 
-Unloads all Howls and clears cues, active sound bookkeeping, resolver mix
-state, and initialization state. It is safe to call during teardown and is
-required before reinitializing with different options.
+Unloads all Howls and clears cues, active sound bookkeeping, listener
+registrations, pending logical fades, resolver mix state, and initialization
+epochs. It is safe to call during teardown and is required before
+reinitializing with different options.
 
 ## Preferences bridge
 
@@ -136,6 +158,7 @@ mix without allowing an older failed slider operation to overwrite a newer one.
 | `setAndPersistBusMute(bus, muted)` | Applies manual mute to Tone and Howler only. It does not write storage. |
 | `syncAudioPrefsFromSettings(audioVolumes, busNames, store, defaultVolume100?)` | Normalizes, merges, applies, and persists several slider values as one serialized update. |
 | `registerFocusLossMute(enabled, store?, busNames?)` | Registers/removes browser blur/focus listeners. Focus removes only the focus-loss layer, preserving manual and global mutes. |
+| `setTransientAudioMute(busNames, reason, muted)` | Adds or removes a named runtime-only mute layer in both Tone and Howler. It never reads or writes persisted preferences and cannot remove a manual mute layer. |
 
 ## Node asset verification
 

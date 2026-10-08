@@ -66,6 +66,13 @@ export interface SpriteResolverOptions {
    * Default: '/audio'
    */
   audioBaseUrl?: string;
+  /**
+   * Whether Howler starts fetching and decoding every sprite sheet during
+   * initialization. Defaults to `true` for compatibility. When `false`, map
+   * validation still completes during initialization and each sheet loads on
+   * the first cue requested from it.
+   */
+  preload?: boolean;
   /** Throw on fetch or validation failures instead of degrading to an empty resolver. */
   strict?: boolean;
 }
@@ -89,6 +96,8 @@ const DEFAULT_AUDIO_BASE_URL = '/audio';
  * One Howl per sprite sheet (shared across all cues in that sheet).
  */
 const _howls = new Map<string, Howl>();
+/** Lazy sheets whose public Howler load() request has already been issued. */
+const _lazyLoadStarted = new Set<Howl>();
 interface FadeState {
   from: number;
   to: number;
@@ -284,6 +293,7 @@ function _buildHowlForFile(
   entries: Array<[string, SpriteEntry]>,
   formats: string[],
   audioBaseUrl: string,
+  preload: boolean,
 ): Howl {
   const spriteObj: Record<string, [number, number] | [number, number, boolean]> = {};
   for (const [cue, entry] of entries) {
@@ -299,7 +309,7 @@ function _buildHowlForFile(
   return new Howl({
     src,
     sprite: spriteObj,
-    preload: true,
+    preload,
     html5: false, // Web Audio API for low latency
   });
 }
@@ -310,6 +320,7 @@ let _lastOptions: NormalizedResolverOptions = {
   spriteMapUrl: DEFAULT_SPRITE_MAP_URL,
   formats: DEFAULT_FORMATS,
   audioBaseUrl: DEFAULT_AUDIO_BASE_URL,
+  preload: true,
   strict: false,
 };
 
@@ -319,13 +330,23 @@ function normalizeOptions(opts: SpriteResolverOptions): NormalizedResolverOption
   const audioBaseUrl = opts.audioBaseUrl ?? DEFAULT_AUDIO_BASE_URL;
   if (spriteMapUrl.trim().length === 0) throw new TypeError('spriteMapUrl must not be empty');
   if (audioBaseUrl.trim().length === 0) throw new TypeError('audioBaseUrl must not be empty');
-  return { spriteMapUrl, formats, audioBaseUrl, strict: opts.strict ?? false };
+  if (opts.preload !== undefined && typeof opts.preload !== 'boolean') {
+    throw new TypeError('preload must be a boolean');
+  }
+  return {
+    spriteMapUrl,
+    formats,
+    audioBaseUrl,
+    preload: opts.preload ?? true,
+    strict: opts.strict ?? false,
+  };
 }
 
 function optionsEqual(a: NormalizedResolverOptions, b: NormalizedResolverOptions): boolean {
   return (
     a.spriteMapUrl === b.spriteMapUrl &&
     a.audioBaseUrl === b.audioBaseUrl &&
+    a.preload === b.preload &&
     a.strict === b.strict &&
     a.formats.length === b.formats.length &&
     a.formats.every((format, index) => format === b.formats[index])
@@ -381,6 +402,7 @@ export async function initSpriteResolver(opts: SpriteResolverOptions = {}): Prom
             entries,
             validated.formatsByFile.get(file) ?? normalized.formats,
             normalized.audioBaseUrl,
+            normalized.preload,
           ),
         );
       }
@@ -458,6 +480,7 @@ export function playCue(cueName: string, target: string | PlayCueOptions = 'sfx'
     howl.off('end', endHandler, id);
     howl.off('stop', cleanup, id);
     howl.off('playerror', cleanup, id);
+    howl.off('loaderror', loadErrorHandler);
   };
   const endHandler = (): void => {
     if (active.loop) {
@@ -466,6 +489,12 @@ export function playCue(cueName: string, target: string | PlayCueOptions = 'sfx'
     }
     cleanup();
   };
+  const loadErrorHandler = (): void => {
+    if (_activeSounds.get(id) !== active) return;
+    const failed = [..._activeSounds.values()].filter((sound) => sound.howl === howl);
+    for (const sound of failed) sound.cleanup?.();
+    _lazyLoadStarted.delete(howl);
+  };
   active.cleanup = cleanup;
   _activeSounds.set(id, active);
   howl.volume(_effectiveVolume(bus, gain), id);
@@ -473,6 +502,11 @@ export function playCue(cueName: string, target: string | PlayCueOptions = 'sfx'
   howl.on('end', endHandler, id);
   howl.once('stop', cleanup, id);
   howl.once('playerror', cleanup, id);
+  howl.on('loaderror', loadErrorHandler);
+  if (!_lastOptions.preload && !_lazyLoadStarted.has(howl)) {
+    _lazyLoadStarted.add(howl);
+    howl.load();
+  }
   return id;
 }
 
@@ -678,6 +712,7 @@ export function disposeSpriteResolver(): void {
     howl.unload();
   }
   _howls.clear();
+  _lazyLoadStarted.clear();
   _activeSounds.clear();
   _cueMap = {};
   _busVolumes.clear();

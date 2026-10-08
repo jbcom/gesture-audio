@@ -25,6 +25,10 @@ process modules cannot enter a browser bundle.
 - Manual, focus-loss, and global-preference mutes cannot undo one another.
 - Resolver initialization is idempotent for identical options and rejects
   different options until disposal.
+- Sprite resolver `preload: false` still validates the complete JSON map, but
+  defers each sheet's fetch and decode until its first cue. Pending cue IDs are
+  tracked before public Howler loading starts, so transport, mix, spatial, and
+  teardown controls remain effective without private Howler queue access.
 - Preference read/update transactions are serialized per store so concurrent
   sliders cannot overwrite a newer runtime or persisted value with stale state.
 - Every active Howler sound retains its target bus so live volume and mute
@@ -44,7 +48,8 @@ process modules cannot enter a browser bundle.
 
 `registerAudioGestureTrigger` returns a listener cleanup. `disposeBuses` clears
 duck timers and Tone nodes. `disposeSpriteResolver` unloads Howls, clears active
-sound bookkeeping, and allows initialization with new options. `_resetAudioEngine`
+sound bookkeeping (including pending lazy-sheet callbacks), and allows
+initialization with new options. `_resetAudioEngine`
 is retained for existing test/hot-reload integrations; application shutdown
 normally needs the returned listener cleanup plus the two disposal functions.
 

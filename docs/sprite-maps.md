@@ -60,6 +60,22 @@ segments or backslashes. A leading slash is ignored; it is not a cue namespace. 
 `/audio/ui/sprite.webm` and `/audio/ui/sprite.m4a`. Supply at least two formats
 that cover the browsers you support, and keep their cue offsets identical.
 
+## Load only requested sheets
+
+`initSpriteResolver()` preserves its eager default and asks Howler to preload
+every declared sheet. Games with large maps can opt into on-demand sheet loads:
+
+```ts
+await initSpriteResolver({ preload: false, strict: true });
+```
+
+This still fetches and validates `sprite-map.json` during initialization so
+invalid maps fail at bootstrap in strict mode. It creates each sheet definition
+without fetching or decoding its audio. The first `playCue` for a sheet queues
+that cue and loads just that sheet through Howler's public API. It avoids unused
+sheet fetches and decoding; it does not make a network or device-performance
+guarantee.
+
 ## Verify assets in build tooling
 
 ```ts

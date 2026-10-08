@@ -21,6 +21,7 @@ async function evaluate(
     delayedMerge?: boolean;
     changedDuringRead?: boolean;
     slowMerge?: boolean;
+    dependabot?: boolean;
   } = {},
 ) {
   const createCommitStatus = vi.fn().mockResolvedValue({});
@@ -60,6 +61,7 @@ async function evaluate(
     payload: {
       pull_request: {
         number: 42,
+        user: { login: options.dependabot ? 'dependabot[bot]' : 'contributor' },
         head: {
           sha: 'pr-head-sha',
           repo: { full_name: trusted ? 'jbcom/gesture-audio' : 'contributor/gesture-audio' },
@@ -196,5 +198,13 @@ describe('trusted repository policy', () => {
       4000,
     );
     assertReports(result, 'success');
+  });
+
+  it('evaluates Dependabot without trying to write with its restricted token', async () => {
+    const result = await evaluate([], true, false, { dependabot: true });
+    expect(result.error).toBeUndefined();
+    expect(result.setFailed).not.toHaveBeenCalled();
+    expect(result.createCommitStatus).not.toHaveBeenCalled();
+    expect(result.get).toHaveBeenCalledTimes(2);
   });
 });

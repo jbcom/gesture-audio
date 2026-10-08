@@ -22,6 +22,9 @@ required status, so an intentionally skipped validation job cannot satisfy
 the trusted policy.
 Fork changes to the ruleset administration script are protected alongside
 other control-plane files.
+Dependabot's read-only target workflow evaluates policy without writing
+statuses; a trusted `workflow_run` reporter verifies GitHub's PR metadata
+and reports both statuses without checking out or executing PR content.
 
 `scripts/apply-branch-ruleset.mjs` is the canonical repository ruleset script.
 Its omitted arguments default to `gesture-audio` and

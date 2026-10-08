@@ -54,6 +54,8 @@ intentional public API break.
   available and keeps structural checks portable when it is not.
 - `tests/repository-policy.test.ts` evaluates the trusted policy script with
   mocked GitHub APIs, including protected changes, renames, and API errors.
+- `tests/dependabot-policy.test.ts` verifies the privileged metadata reporter
+  for Dependabot without checking out or executing PR content.
 
 Coverage thresholds are enforced by `pnpm coverage`. Do not add exclusions for
 ordinary error paths; test observable behavior through the public API.

@@ -2,8 +2,9 @@ name: CI
 
 on:
   pull_request:
+    types: [opened, synchronize, reopened, edited]
   pull_request_target:
-    types: [opened, synchronize, reopened]
+    types: [opened, synchronize, reopened, edited]
   push:
     branches: [main]
   # Lets `gh workflow run ci.yml --ref <branch>` re-fire CI when a transient
@@ -81,6 +82,9 @@ jobs:
             const pr = context.payload.pull_request;
             const statusTargets = new Set([pr.head.sha]);
             const report = async (state, description) => {
+              // Dependabot target runs have a read-only token. The trusted workflow_run
+              // reporter publishes this required status after successful evaluation.
+              if (pr.user?.login === 'dependabot[bot]') return;
               for (const sha of statusTargets) await github.rest.repos.createCommitStatus({
               ...context.repo,
               sha,

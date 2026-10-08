@@ -15,9 +15,11 @@ const howlerState = vi.hoisted(() => ({
   positionArgs: [] as Array<[number, number, number, number]>,
   listenerPositionArgs: [] as Array<[number, number, number]>,
   listenerOrientationArgs: [] as Array<[number, number, number, number, number, number]>,
+  loadCalls: 0,
   options: [] as Array<{
     sprite: Record<string, [number, number] | [number, number, boolean]>;
     src: string[];
+    preload: boolean;
   }>,
   unloadCalled: false,
   instances: [] as Array<{
@@ -26,6 +28,7 @@ const howlerState = vi.hoisted(() => ({
     volume: ReturnType<typeof vi.fn>;
     pause: ReturnType<typeof vi.fn>;
     pos: ReturnType<typeof vi.fn>;
+    load: ReturnType<typeof vi.fn>;
     on: ReturnType<typeof vi.fn>;
     once: ReturnType<typeof vi.fn>;
     off: ReturnType<typeof vi.fn>;
@@ -43,6 +46,7 @@ vi.mock('howler', () => {
     volume: ReturnType<typeof vi.fn>;
     pause: ReturnType<typeof vi.fn>;
     pos: ReturnType<typeof vi.fn>;
+    load: ReturnType<typeof vi.fn>;
     on: ReturnType<typeof vi.fn>;
     once: ReturnType<typeof vi.fn>;
     off: ReturnType<typeof vi.fn>;
@@ -70,6 +74,9 @@ vi.mock('howler', () => {
       const pos = vi.fn((x: number, y: number, z: number, id: number) => {
         s.positionArgs.push([x, y, z, id]);
       });
+      const load = vi.fn(() => {
+        s.loadCalls += 1;
+      });
       const unload = vi.fn(() => {
         s.unloadCalled = true;
       });
@@ -81,12 +88,13 @@ vi.mock('howler', () => {
       this.volume = volume;
       this.pause = pause;
       this.pos = pos;
+      this.load = load;
       this.once = once;
       this.on = on;
       this.off = off;
       this.unload = unload;
-      s.options.push({ sprite: opts.sprite, src: opts.src });
-      s.instances.push({ play, stop, volume, pause, pos, on, once, off, unload });
+      s.options.push({ sprite: opts.sprite, src: opts.src, preload: opts.preload });
+      s.instances.push({ play, stop, volume, pause, pos, load, on, once, off, unload });
     }
   }
 
@@ -151,6 +159,7 @@ function resetHowlerState() {
   howlerState.positionArgs.length = 0;
   howlerState.listenerPositionArgs.length = 0;
   howlerState.listenerOrientationArgs.length = 0;
+  howlerState.loadCalls = 0;
   howlerState.options.length = 0;
   howlerState.unloadCalled = false;
   howlerState.instances.length = 0;
@@ -293,6 +302,9 @@ describe('initSpriteResolver', () => {
     await expect(initSpriteResolver({ formats: ['ogg', 'ogg'] })).rejects.toThrow(/duplicate/);
     await expect(initSpriteResolver({ spriteMapUrl: '' })).rejects.toThrow(/spriteMapUrl/);
     await expect(initSpriteResolver({ audioBaseUrl: '' })).rejects.toThrow(/audioBaseUrl/);
+    await expect(initSpriteResolver({ preload: 'later' as unknown as boolean })).rejects.toThrow(
+      /preload/,
+    );
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
@@ -320,6 +332,30 @@ describe('initSpriteResolver', () => {
     expect(opts.audioBaseUrl).toBe('/custom-audio');
   });
 
+  it('keeps eager Howl preloading as the compatibility default', async () => {
+    mockFetchWith(FLAT_SPRITE_MAP);
+    await initSpriteResolver();
+    expect(howlerState.options).not.toHaveLength(0);
+    expect(howlerState.options.every((options) => options.preload)).toBe(true);
+    expect(_getLastResolverOptions().preload).toBe(true);
+  });
+
+  it('validates lazy maps without loading sheets until their first cue plays', async () => {
+    mockFetchWith(FLAT_SPRITE_MAP);
+    await initSpriteResolver({ preload: false, strict: true });
+
+    expect(_getCueMap()['drawer-open']).toBeDefined();
+    expect(howlerState.options.every((options) => options.preload === false)).toBe(true);
+    expect(howlerState.loadCalls).toBe(0);
+
+    playCue('drawer-open');
+    expect(howlerState.loadCalls).toBe(1);
+    playCue('ka-chunk');
+    expect(howlerState.loadCalls).toBe(1);
+    playCue('ring-bell');
+    expect(howlerState.loadCalls).toBe(2);
+  });
+
   it('uses a file-local wav/ogg format list and emits a looping sprite tuple', async () => {
     mockFetchWith({
       ambience: {
@@ -335,6 +371,7 @@ describe('initSpriteResolver', () => {
     expect(howlerState.options[0]).toEqual({
       src: ['/audio/music/ambience.wav', '/audio/music/ambience.ogg'],
       sprite: { ambience: [0, 2_000, true] },
+      preload: true,
     });
   });
 
@@ -461,6 +498,62 @@ describe('stopCue', () => {
     const id = playCue('ring-bell', 'sfx');
     stopCue(id);
     expect(howlerState.stopArgs).toContain(id);
+  });
+});
+
+describe('lazy sprite lifecycle', () => {
+  beforeEach(async () => {
+    resetHowlerState();
+    disposeSpriteResolver();
+    mockFetchWith({
+      loop: { start_ms: 0, end_ms: 1_000, file: 'music/loop', loop: true },
+    });
+    await initSpriteResolver({ preload: false, strict: true });
+  });
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    disposeSpriteResolver();
+  });
+
+  it('keeps a pending lazy cue controllable and cancels it before the sheet loads', () => {
+    const id = playCue('loop', { bus: 'music', gain: 0.5, position: [1, 2, 3] });
+    const instance = howlerState.instances[0];
+    expect(howlerState.loadCalls).toBe(1);
+    expect(setCueGain(id, 0.25)).toBe(true);
+    expect(setCuePosition(id, [4, 5, 6])).toBe(true);
+    expect(pauseCue(id)).toBe(true);
+
+    stopCue(id);
+    expect(instance?.stop).toHaveBeenCalledWith(id);
+    expect(setCueGain(id, 0.5)).toBe(false);
+
+    const staleLoadError = instance?.on.mock.calls.find(([event]) => event === 'loaderror')?.[1] as
+      | (() => void)
+      | undefined;
+    expect(staleLoadError).toBeTypeOf('function');
+    staleLoadError?.();
+    expect(setCueGain(id, 0.5)).toBe(false);
+  });
+
+  it('cleans a failed pending sheet, permits retry, and ignores callbacks after disposal', () => {
+    const id = playCue('loop');
+    const instance = howlerState.instances[0];
+    const loadError = instance?.on.mock.calls.find(([event]) => event === 'loaderror')?.[1] as
+      | (() => void)
+      | undefined;
+    expect(loadError).toBeTypeOf('function');
+
+    loadError?.();
+    expect(setCueGain(id, 0.5)).toBe(false);
+
+    const retryId = playCue('loop');
+    expect(howlerState.loadCalls).toBe(2);
+    const retryLoadError = instance?.on.mock.calls
+      .filter(([event]) => event === 'loaderror')
+      .at(-1)?.[1] as (() => void) | undefined;
+    disposeSpriteResolver();
+    expect(() => retryLoadError?.()).not.toThrow();
+    expect(setCueGain(retryId, 0.5)).toBe(false);
   });
 });
 

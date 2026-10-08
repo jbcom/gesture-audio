@@ -83,6 +83,7 @@ initialization requires `disposeSpriteResolver()` first.
 | `spriteMapUrl` | `/audio/sprite-map.json` | Non-empty URL for the JSON map. |
 | `audioBaseUrl` | `/audio` | Non-empty base path for sprite files. |
 | `formats` | `['webm', 'm4a']` | Non-empty list of letter/digit extensions, in Howler preference order. |
+| `preload` | `true` | When `false`, validates the JSON map and creates sheet definitions without fetching or decoding audio. The first `playCue` for each sheet queues playback and calls public `Howl.load()` for that sheet. |
 | `strict` | `false` | Reject map/network/validation failures instead of warning and using an empty resolver. |
 
 The map can be flat (`cue → entry`) or grouped (`group → cue → entry`). Every
@@ -111,6 +112,12 @@ bus/master volume and mute changes; a pause freezes that fade. `setCuePosition`
 returns whether the ID exists after validating its position. Looping sprite IDs
 remain active between loop-end events, so these controls continue to affect
 them until stopped.
+
+With `preload: false`, the resolver registers the returned ID before it starts
+the sheet load. `stopCue`, mix updates, fades, pause/resume, and spatial updates
+therefore still apply while the load is pending. A failed sheet removes its
+pending IDs without throwing from `playCue`; a later cue can request that sheet
+again.
 
 ### `setAudioListener(position, forward, up?)`
 

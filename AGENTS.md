@@ -1,6 +1,6 @@
 ---
 title: gesture-audio Agent Guide
-updated: 2026-08-24
+updated: 2026-10-07
 status: current
 domain: technical
 ---
@@ -70,7 +70,11 @@ Full invariants and error policy: `docs/architecture.md`.
 
 ## Testing
 
-- `tests/*.test.ts` mirror `src/*.ts` one-to-one; `tests/verify-sprites.test.ts`
+- Runtime tests mirror the source modules; `tests/repository-policy.test.ts`
+  verifies trusted CI status identity, protected paths, renames, and API errors.
+  `tests/dependabot-policy.test.ts` verifies the trusted follow-up reporter
+  used when Dependabot's token is read-only.
+  `tests/verify-sprites.test.ts`
   uses real temporary audio when `ffmpeg`/`ffprobe` are on `PATH` and falls
   back to structural-only checks when they are not.
 - `pnpm coverage` enforces coverage thresholds (see `vitest.config.ts`). Do

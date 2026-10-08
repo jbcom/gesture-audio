@@ -63,7 +63,7 @@ export default defineConfig({
             },
             {
               group: 'Project',
-              pages: ['contributing', 'security', 'changelog'],
+              pages: ['contributing', 'security', 'changelog', 'decisions'],
             },
           ],
         }),

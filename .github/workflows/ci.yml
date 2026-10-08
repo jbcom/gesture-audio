@@ -2,8 +2,9 @@ name: CI
 
 on:
   pull_request:
+    types: [opened, synchronize, reopened, edited]
   pull_request_target:
-    types: [opened, synchronize, reopened]
+    types: [opened, synchronize, reopened, edited]
   push:
     branches: [main]
   # Lets `gh workflow run ci.yml --ref <branch>` re-fire CI when a transient
@@ -62,7 +63,7 @@ jobs:
           echo "Validation policy: $reason"
 
   repository-policy:
-    name: Repository Policy / gate
+    name: Trusted repository policy evaluation
     # This trusted-base workflow never checks out or executes fork content. It
     # only prevents an external fork from changing control-plane files before
     # its untrusted validation run can be considered mergeable.
@@ -72,41 +73,86 @@ jobs:
     permissions:
       contents: read
       pull-requests: read
+      statuses: write
     steps:
-      - name: Trusted upstream PR
-        if: github.event.pull_request.head.repo.full_name == github.repository
-        run: echo "Trusted upstream PR; external-fork control-plane policy does not apply."
-      - name: Reject external control-plane changes
-        if: github.event.pull_request.head.repo.full_name != github.repository
+      - name: Report trusted policy on the PR head commit
         uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8.0.0
         with:
           script: |
-            const files = await github.paginate(github.rest.pulls.listFiles, {
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              pull_number: context.payload.pull_request.number,
-              per_page: 100,
-            });
-            const protectedPaths = [
-              '.github/workflows/',
-              '.github/actions/',
-              '.github/dependabot.yml',
-              '.coderabbit.yaml',
-              'sonar-project.properties',
-              'release-please-config.json',
-              '.release-please-manifest.json',
-              'docs/sourcey.config.ts',
-              'docs/package.json',
-            ];
-            const changed = files
-              .map(({ filename }) => filename)
-              .filter((filename) => protectedPaths.some((path) =>
-                path.endsWith('/') ? filename.startsWith(path) : filename === path,
-              ));
-            if (changed.length > 0) {
-              core.setFailed(
-                `External forks cannot modify trusted control-plane files: ${changed.join(', ')}`,
-              );
+            const pr = context.payload.pull_request;
+            const statusTargets = new Set([pr.head.sha]);
+            const report = async (state, description) => {
+              // Dependabot target runs have a read-only token. The trusted workflow_run
+              // reporter publishes this required status after successful evaluation.
+              if (pr.user?.login === 'dependabot[bot]') return;
+              for (const sha of statusTargets) await github.rest.repos.createCommitStatus({
+              ...context.repo,
+              sha,
+              context: 'Repository Policy / gate',
+              state,
+              description,
+              target_url: `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`,
+              });
+            };
+            await report('pending', 'Evaluating trusted repository policy');
+            try {
+              let current;
+              // Up to 210 seconds of backoff leaves time for reporting within the five-minute job.
+              for (let attempt = 0; attempt < 18; attempt++) {
+                current = (await github.rest.pulls.get({
+                  ...context.repo,
+                  pull_number: pr.number,
+                })).data;
+                if (current.head.sha !== pr.head.sha) throw new Error('PR head changed during policy evaluation');
+                if (current.merge_commit_sha) break;
+                if (attempt < 17) {
+                  const delay = Math.min(1000 * 2 ** attempt, 15000);
+                  await new Promise((resolve) => setTimeout(resolve, delay));
+                }
+              }
+              if (!current.merge_commit_sha) throw new Error('PR test merge commit is unavailable');
+              statusTargets.add(current.merge_commit_sha);
+              await report('pending', 'Evaluating trusted repository policy');
+              if (pr.head.repo.full_name !== `${context.repo.owner}/${context.repo.repo}`) {
+                const files = await github.paginate(github.rest.pulls.listFiles, {
+                  ...context.repo,
+                  pull_number: pr.number,
+                  per_page: 100,
+                });
+                const protectedPaths = [
+                  '.github/workflows/',
+                  '.github/actions/',
+                  '.github/dependabot.yml',
+                  '.coderabbit.yaml',
+                  'sonar-project.properties',
+                  'release-please-config.json',
+                  '.release-please-manifest.json',
+                  'docs/sourcey.config.ts',
+                  'docs/package.json',
+                  'scripts/apply-branch-ruleset.mjs',
+                ];
+                const changed = files
+                  .flatMap(({ filename, previous_filename }) => [filename, previous_filename].filter(Boolean))
+                  .filter((filename) => protectedPaths.some((path) =>
+                    path.endsWith('/') ? filename.startsWith(path) : filename === path,
+                  ));
+                if (changed.length > 0) {
+                  await report('failure', 'External fork modifies protected control-plane files');
+                  core.setFailed(`External forks cannot modify trusted control-plane files: ${changed.join(', ')}`);
+                  return;
+                }
+              }
+              const latest = (await github.rest.pulls.get({
+                ...context.repo,
+                pull_number: pr.number,
+              })).data;
+              if (latest.head.sha !== pr.head.sha || latest.merge_commit_sha !== current.merge_commit_sha) {
+                throw new Error('PR changed during policy evaluation');
+              }
+              await report('success', 'Trusted repository policy passed');
+            } catch (error) {
+              await report('error', 'Trusted repository policy could not complete');
+              throw error;
             }
 
   verify:
@@ -139,7 +185,12 @@ jobs:
         run: pnpm install --frozen-lockfile
       - name: Install audio verification tools
         if: needs.classify.outputs.skip-validation != 'true'
-        run: sudo apt-get update && sudo apt-get install --yes ffmpeg
+        # Audio fixtures need FFmpeg and ffprobe, not optional speech models or GPU drivers.
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes --no-install-recommends ffmpeg
+          ffmpeg -version
+          ffprobe -version
       - name: Lockfile is in sync
         if: needs.classify.outputs.skip-validation != 'true'
         run: |
@@ -281,9 +332,28 @@ jobs:
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
 
+  title:
+    name: title
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 'lts/*'
+      - name: Require a Conventional Commit PR title
+        env:
+          PR_TITLE: ${{ github.event.pull_request.title }}
+        run: |
+          node --input-type=module -e '
+            if (!/^(feat|fix|docs|style|refactor|perf|test|build|ci|chore|revert)(\([^()\r\n]+\))?!?: \S.*$/.test(process.env.PR_TITLE || "")) {
+              console.error("PR title must be a Conventional Commit with a nonempty description");
+              process.exitCode = 1;
+            }
+          '
+
   gate:
     name: CI / gate
-    needs: [classify, repository-policy, verify, compatibility, docs, dependency-review, sonarcloud]
+    needs: [classify, repository-policy, verify, compatibility, docs, dependency-review, sonarcloud, title]
     if: always()
     runs-on: ubuntu-24.04
     steps:

@@ -29,18 +29,18 @@ persistence framework. Those remain local to the application.
 
 ## Install
 
+```sh
+npm install gesture-audio tone howler
+```
+
+`tone` and `howler` are peer dependencies, so the application owns their versions.
+
 ## Compatibility
 
 Node.js 22, 24 and 26 are supported for build tooling (`engines.node: >=22`).
 Support follows maintained Node lines, rather than requiring one exact patch.
 CI verifies each supported major on Ubuntu. The runtime supports modern
 browsers with Web Audio, `fetch`, and the event APIs used by Tone.js and Howler.
-
-```sh
-npm install gesture-audio tone howler
-```
-
-`tone` and `howler` are peer dependencies, so the application owns their versions.
 
 ## Quick start
 

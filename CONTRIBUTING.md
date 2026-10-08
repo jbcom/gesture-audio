@@ -5,19 +5,19 @@ Thanks for taking the time to contribute.
 ## Getting set up
 
 ```sh
-mise install   # installs the Node + pnpm versions this repo pins
+mise install   # installs the local Node major and declared pnpm version
 pnpm install
 pnpm verify     # lint, typecheck, coverage, build, doc/import/package checks,
                 # and the docs site build — the same gate CI runs
 ```
 
-[mise](https://mise.jdx.dev) is a local-only convenience — it reads the same
-two idiomatic files CI's official actions read, so no version is pinned
-twice: `.nvmrc` for Node (`actions/setup-node`) and
-`package.json#packageManager` for pnpm (`pnpm/action-setup`). CI does not
-depend on mise. `package.json#engines.node` states the minimum supported
-Node version; CI's `compatibility` job in `ci.yml` matrix-tests the full
-supported range (earliest non-deprecated LTS through latest stable).
+[mise](https://mise.jdx.dev) is a local-only convenience. It reads `.nvmrc`
+for the local Node major and `package.json#packageManager` for pnpm. CI uses
+the official setup actions, selecting Node.js 22, 24 and 26 explicitly for
+full verification and `lts/*` for documentation/deployment jobs. Its pnpm
+version comes from `package.json#packageManager`. CI does not depend on mise.
+`package.json#engines.node` declares `>=22`; support follows maintained lines.
+The compatibility job also checks additional operating systems.
 
 ## Making a change
 
@@ -52,6 +52,10 @@ intentional public API break.
 - `tests/preferences-bridge.test.ts` covers persistence and mute layers.
 - `tests/verify-sprites.test.ts` uses real temporary audio when ffmpeg is
   available and keeps structural checks portable when it is not.
+- `tests/repository-policy.test.ts` evaluates the trusted policy script with
+  mocked GitHub APIs, including protected changes, renames, and API errors.
+- `tests/dependabot-policy.test.ts` verifies the privileged metadata reporter
+  for Dependabot without checking out or executing PR content.
 
 Coverage thresholds are enforced by `pnpm coverage`. Do not add exclusions for
 ordinary error paths; test observable behavior through the public API.

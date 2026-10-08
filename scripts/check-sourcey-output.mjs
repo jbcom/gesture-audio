@@ -8,6 +8,7 @@ const required = [
   'integration/index.html',
   'api-reference/index.html',
   'architecture/index.html',
+  'decisions/index.html',
   'sitemap.xml',
   'llms.txt',
   'llms-full.txt',
@@ -19,8 +20,10 @@ for (const file of required) {
   await access(resolve(output, file));
 }
 
-const [index, sitemap, llms] = await Promise.all(
-  ['index.html', 'sitemap.xml', 'llms.txt'].map((file) => readFile(resolve(output, file), 'utf8')),
+const [index, sitemap, llms, llmsFull] = await Promise.all(
+  ['index.html', 'sitemap.xml', 'llms.txt', 'llms-full.txt'].map((file) =>
+    readFile(resolve(output, file), 'utf8'),
+  ),
 );
 
 const requiredText = [
@@ -29,6 +32,12 @@ const requiredText = [
   ['sitemap.xml', sitemap, 'https://jonbogaty.com/gesture-audio/quick-start/'],
   ['sitemap.xml', sitemap, 'https://jonbogaty.com/gesture-audio/integration/'],
   ['llms.txt', llms, '/quick-start/'],
+  ['llms.txt', llms, '/decisions/'],
+  ['sitemap.xml', sitemap, 'https://jonbogaty.com/gesture-audio/decisions/'],
+  ['llms-full.txt', llmsFull, 'Maintained Node lines'],
+  ['llms-full.txt', llmsFull, 'These selectors never require equality to an exact patch release.'],
+  ['llms-full.txt', llmsFull, 'Repository rules'],
+  ['llms-full.txt', llmsFull, 'scripts/apply-branch-ruleset.mjs'],
 ];
 
 for (const [file, contents, expected] of requiredText) {

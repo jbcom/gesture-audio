@@ -4,6 +4,14 @@ Notable changes to this project are recorded here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and releases follow
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.0](https://github.com/jbcom/gesture-audio/compare/v0.2.4...v0.3.0) (2026-10-08)
+
+
+### Features
+
+* add sample loops and spatial cues ([7344c66](https://github.com/jbcom/gesture-audio/commit/7344c66df8cd912f6e9fdc1c1e68a3172f25dfc9))
+* add sample loops and spatial cues ([9ff41b3](https://github.com/jbcom/gesture-audio/commit/9ff41b3d006b8adcd4623d4803a0aca904d3c2a6))
+
 ## [0.2.4](https://github.com/jbcom/gesture-audio/compare/v0.2.3...v0.2.4) (2026-10-07)
 
 

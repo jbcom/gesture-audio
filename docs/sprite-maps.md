@@ -36,6 +36,24 @@ duplicates, and malformed entries emit actionable warnings. Use `strict: true`
 to reject the whole map instead. A missing map otherwise degrades to a no-op
 resolver, which is useful when audio is optional.
 
+An entry may override its file's codec preference list and request sprite
+looping. Every entry pointing at the same `file` must use exactly the same
+ordered `formats` list, because Howler chooses one codec for that file rather
+than falling back after an HTTP error. `loop: true` becomes Howler's third
+sprite tuple value and the resolver retains that sound ID across loop ends.
+
+```json
+{
+  "burial-chamber-ambience": {
+    "start_ms": 0,
+    "end_ms": 32000,
+    "file": "music/burial-chamber",
+    "formats": ["wav", "ogg"],
+    "loop": true
+  }
+}
+```
+
 `file` must be a non-empty path inside `audioBaseUrl`, with no `.` or `..`
 segments or backslashes. A leading slash is ignored; it is not a cue namespace. For
 `audioBaseUrl: '/audio'` and `file: 'ui/sprite'`, Howler receives

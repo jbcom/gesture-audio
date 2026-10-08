@@ -37,12 +37,15 @@ export {
   registerFocusLossMute,
   setAndPersistBusMute,
   setAndPersistBusVolume,
+  setTransientAudioMute,
   syncAudioPrefsFromSettings,
 } from './preferences-bridge.js';
 
 // Howler sprite resolver
 export type {
+  AudioPosition,
   NestedSpriteMap,
+  PlayCueOptions,
   SpriteEntry,
   SpriteMap,
   SpriteResolverOptions,
@@ -51,8 +54,14 @@ export {
   _getCueMap,
   _getLastResolverOptions,
   disposeSpriteResolver,
+  fadeCue,
   initSpriteResolver,
+  pauseCue,
   playCue,
+  resumeCue,
+  setAudioListener,
+  setCueGain,
+  setCuePosition,
   setResolverMasterBus,
   setResolverMute,
   setResolverVolume,

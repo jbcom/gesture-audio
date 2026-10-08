@@ -177,7 +177,7 @@ export function _setBusMuteReason<B extends string>(bus: B, reason: string, mute
 export function duckBus<B extends string>(bus: B, duckDb: number, durationMs?: number): void {
   if (!_buses || !Object.hasOwn(_buses, bus)) return;
   const b = _buses[bus];
-  if (!b || b.muted) return;
+  if (!b) return;
   assertFinite(duckDb, 'duckDb');
   if (duckDb > 0) throw new RangeError('duckDb must be 0 or negative');
   if (durationMs !== undefined) {

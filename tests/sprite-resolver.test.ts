@@ -11,11 +11,22 @@ const howlerState = vi.hoisted(() => ({
   playArgs: [] as string[],
   stopArgs: [] as number[],
   volumeArgs: [] as Array<[number, number]>,
+  pauseArgs: [] as number[],
+  positionArgs: [] as Array<[number, number, number, number]>,
+  listenerPositionArgs: [] as Array<[number, number, number]>,
+  listenerOrientationArgs: [] as Array<[number, number, number, number, number, number]>,
+  options: [] as Array<{
+    sprite: Record<string, [number, number] | [number, number, boolean]>;
+    src: string[];
+  }>,
   unloadCalled: false,
   instances: [] as Array<{
     play: ReturnType<typeof vi.fn>;
     stop: ReturnType<typeof vi.fn>;
     volume: ReturnType<typeof vi.fn>;
+    pause: ReturnType<typeof vi.fn>;
+    pos: ReturnType<typeof vi.fn>;
+    on: ReturnType<typeof vi.fn>;
     once: ReturnType<typeof vi.fn>;
     off: ReturnType<typeof vi.fn>;
     unload: ReturnType<typeof vi.fn>;
@@ -30,12 +41,15 @@ vi.mock('howler', () => {
     play: ReturnType<typeof vi.fn>;
     stop: ReturnType<typeof vi.fn>;
     volume: ReturnType<typeof vi.fn>;
+    pause: ReturnType<typeof vi.fn>;
+    pos: ReturnType<typeof vi.fn>;
+    on: ReturnType<typeof vi.fn>;
     once: ReturnType<typeof vi.fn>;
     off: ReturnType<typeof vi.fn>;
     unload: ReturnType<typeof vi.fn>;
 
-    constructor(_opts: {
-      sprite: Record<string, [number, number]>;
+    constructor(opts: {
+      sprite: Record<string, [number, number] | [number, number, boolean]>;
       src: string[];
       preload: boolean;
       html5: boolean;
@@ -50,22 +64,41 @@ vi.mock('howler', () => {
       const volume = vi.fn((vol: number, id: number) => {
         s.volumeArgs.push([vol, id]);
       });
+      const pause = vi.fn((id: number) => {
+        s.pauseArgs.push(id);
+      });
+      const pos = vi.fn((x: number, y: number, z: number, id: number) => {
+        s.positionArgs.push([x, y, z, id]);
+      });
       const unload = vi.fn(() => {
         s.unloadCalled = true;
       });
       const once = vi.fn();
+      const on = vi.fn();
       const off = vi.fn();
       this.play = play;
       this.stop = stop;
       this.volume = volume;
+      this.pause = pause;
+      this.pos = pos;
       this.once = once;
+      this.on = on;
       this.off = off;
       this.unload = unload;
-      s.instances.push({ play, stop, volume, once, off, unload });
+      s.options.push({ sprite: opts.sprite, src: opts.src });
+      s.instances.push({ play, stop, volume, pause, pos, on, once, off, unload });
     }
   }
 
-  return { Howl: MockHowl };
+  return {
+    Howl: MockHowl,
+    Howler: {
+      pos: vi.fn((x: number, y: number, z: number) => s.listenerPositionArgs.push([x, y, z])),
+      orientation: vi.fn((x: number, y: number, z: number, ux: number, uy: number, uz: number) =>
+        s.listenerOrientationArgs.push([x, y, z, ux, uy, uz]),
+      ),
+    },
+  };
 });
 
 const FLAT_SPRITE_MAP = {
@@ -114,6 +147,11 @@ function resetHowlerState() {
   howlerState.playArgs.length = 0;
   howlerState.stopArgs.length = 0;
   howlerState.volumeArgs.length = 0;
+  howlerState.pauseArgs.length = 0;
+  howlerState.positionArgs.length = 0;
+  howlerState.listenerPositionArgs.length = 0;
+  howlerState.listenerOrientationArgs.length = 0;
+  howlerState.options.length = 0;
   howlerState.unloadCalled = false;
   howlerState.instances.length = 0;
   howlerState.nextSoundId = 1;
@@ -123,8 +161,14 @@ import {
   _getCueMap,
   _getLastResolverOptions,
   disposeSpriteResolver,
+  fadeCue,
   initSpriteResolver,
+  pauseCue,
   playCue,
+  resumeCue,
+  setAudioListener,
+  setCueGain,
+  setCuePosition,
   setResolverMasterBus,
   setResolverMute,
   setResolverVolume,
@@ -167,6 +211,14 @@ describe('initSpriteResolver', () => {
     const cues = _getCueMap();
     expect(Object.hasOwn(cues, 'constructor')).toBe(true);
     expect(Object.hasOwn(cues, '__proto__')).toBe(true);
+  });
+
+  it('rejects duplicate cue names across grouped maps in strict mode', async () => {
+    mockFetchWith({
+      first: { duplicate: { start_ms: 0, end_ms: 100, file: 'ui/first' } },
+      second: { duplicate: { start_ms: 0, end_ms: 100, file: 'ui/second' } },
+    });
+    await expect(initSpriteResolver({ strict: true })).rejects.toThrow(/duplicate cue/);
   });
 
   it('is idempotent — calling twice does not rebuild Howls', async () => {
@@ -238,7 +290,9 @@ describe('initSpriteResolver', () => {
     const fetchMock = vi.fn();
     vi.stubGlobal('fetch', fetchMock);
     await expect(initSpriteResolver({ formats: [] })).rejects.toThrow(/formats/);
+    await expect(initSpriteResolver({ formats: ['ogg', 'ogg'] })).rejects.toThrow(/duplicate/);
     await expect(initSpriteResolver({ spriteMapUrl: '' })).rejects.toThrow(/spriteMapUrl/);
+    await expect(initSpriteResolver({ audioBaseUrl: '' })).rejects.toThrow(/audioBaseUrl/);
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
@@ -264,6 +318,32 @@ describe('initSpriteResolver', () => {
     expect(opts.spriteMapUrl).toBe('/custom/map.json');
     expect(opts.formats).toEqual(['ogg']);
     expect(opts.audioBaseUrl).toBe('/custom-audio');
+  });
+
+  it('uses a file-local wav/ogg format list and emits a looping sprite tuple', async () => {
+    mockFetchWith({
+      ambience: {
+        start_ms: 0,
+        end_ms: 2_000,
+        file: 'music/ambience',
+        formats: ['wav', 'ogg'],
+        loop: true,
+      },
+    });
+    await initSpriteResolver({ strict: true });
+
+    expect(howlerState.options[0]).toEqual({
+      src: ['/audio/music/ambience.wav', '/audio/music/ambience.ogg'],
+      sprite: { ambience: [0, 2_000, true] },
+    });
+  });
+
+  it('rejects conflicting format declarations for one sprite file in strict mode', async () => {
+    mockFetchWith({
+      first: { start_ms: 0, end_ms: 100, file: 'music/ambience', formats: ['wav', 'ogg'] },
+      second: { start_ms: 100, end_ms: 200, file: 'music/ambience', formats: ['ogg', 'wav'] },
+    });
+    await expect(initSpriteResolver({ strict: true })).rejects.toThrow(/formats for/);
   });
 
   it('defaults to /audio/sprite-map.json + webm/m4a when no options given', async () => {
@@ -384,6 +464,103 @@ describe('stopCue', () => {
   });
 });
 
+describe('cue transport, mix and spatial controls', () => {
+  beforeEach(async () => {
+    resetHowlerState();
+    disposeSpriteResolver();
+    mockFetchWith({
+      loop: {
+        start_ms: 0,
+        end_ms: 1_000,
+        file: 'music/loop',
+        loop: true,
+        formats: ['wav', 'ogg'],
+      },
+    });
+    await initSpriteResolver();
+    setResolverMasterBus('master');
+    setResolverVolume('master', 1);
+    setResolverVolume('music', 1);
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.unstubAllGlobals();
+    disposeSpriteResolver();
+  });
+
+  it('keeps a looping ID live after an end callback so live mix and stop still reach it', () => {
+    const id = playCue('loop', { bus: 'music', gain: 0.5 });
+    const instance = howlerState.instances[0];
+    const endHandler = instance?.on.mock.calls.find(([event]) => event === 'end')?.[1] as
+      | (() => void)
+      | undefined;
+    endHandler?.();
+
+    setResolverVolume('music', 0.4);
+    expect(howlerState.volumeArgs.at(-1)).toEqual([0.2, id]);
+    stopCue(id);
+    expect(howlerState.stopArgs).toContain(id);
+  });
+
+  it('pauses and resumes the same Howler ID', () => {
+    const id = playCue('loop', 'music');
+    expect(pauseCue(id)).toBe(true);
+    expect(howlerState.pauseArgs).toContain(id);
+    expect(resumeCue(id)).toBe(id);
+    expect(howlerState.playArgs).toContain(id);
+  });
+
+  it('composes cue gain with master, bus, mute and live volume changes', () => {
+    setResolverVolume('master', 0.5);
+    setResolverVolume('music', 0.4);
+    const id = playCue('loop', { bus: 'music', gain: 0.5 });
+    expect(howlerState.volumeArgs.at(-1)).toEqual([0.1, id]);
+    expect(setCueGain(id, 0.25)).toBe(true);
+    expect(howlerState.volumeArgs.at(-1)).toEqual([0.05, id]);
+    setResolverMute('music', true);
+    expect(howlerState.volumeArgs.at(-1)).toEqual([0, id]);
+    setResolverMute('music', false);
+    setResolverVolume('music', 0.8);
+    expect(howlerState.volumeArgs.at(-1)).toEqual([0.1, id]);
+  });
+
+  it('fades logical cue gain through mute and pauses the fade clock while paused', () => {
+    vi.useFakeTimers();
+    const id = playCue('loop', 'music');
+    expect(fadeCue(id, 0, 100)).toBe(true);
+    vi.advanceTimersByTime(50);
+    expect(howlerState.volumeArgs.at(-1)?.[0]).toBeCloseTo(0.5, 1);
+    expect(howlerState.volumeArgs.at(-1)?.[1]).toBe(id);
+    expect(pauseCue(id)).toBe(true);
+    setResolverMute('music', true);
+    vi.advanceTimersByTime(500);
+    expect(howlerState.volumeArgs.at(-1)).toEqual([0, id]);
+    setResolverMute('music', false);
+    expect(resumeCue(id)).toBe(id);
+    vi.advanceTimersByTime(60);
+    expect(howlerState.volumeArgs.at(-1)).toEqual([0, id]);
+  });
+
+  it('applies an immediate logical fade target', () => {
+    const id = playCue('loop', 'music');
+    expect(fadeCue(id, 0.3, 0)).toBe(true);
+    expect(howlerState.volumeArgs.at(-1)).toEqual([0.3, id]);
+  });
+
+  it('uses public Howler spatial APIs and rejects malformed coordinate data', () => {
+    const id = playCue('loop', { bus: 'music', position: [1, 2, 3] });
+    expect(howlerState.positionArgs).toContainEqual([1, 2, 3, id]);
+    expect(setCuePosition(id, [4, 5, 6])).toBe(true);
+    setAudioListener([7, 8, 9], [0, 0, -1]);
+    expect(howlerState.listenerPositionArgs).toContainEqual([7, 8, 9]);
+    expect(howlerState.listenerOrientationArgs).toContainEqual([0, 0, -1, 0, 1, 0]);
+    expect(() => playCue('loop', { position: [Number.NaN, 0, 0] })).toThrow(/finite/);
+    expect(() => setCuePosition(id, [0, 1] as unknown as [number, number, number])).toThrow(
+      /three-number/,
+    );
+  });
+});
+
 describe('bus volume and mute', () => {
   beforeEach(async () => {
     resetHowlerState();
@@ -417,16 +594,16 @@ describe('bus volume and mute', () => {
   it('removes active-sound tracking and sibling listeners when playback ends', () => {
     const id = playCue('drawer-open', 'sfx');
     const instance = howlerState.instances[0];
-    const endRegistration = instance?.once.mock.calls.find(([event]) => event === 'end');
+    const endRegistration = instance?.on.mock.calls.find(([event]) => event === 'end');
     const cleanup = endRegistration?.[1] as (() => void) | undefined;
     expect(cleanup).toBeTypeOf('function');
     cleanup?.();
     const volumeCallsAfterCleanup = howlerState.volumeArgs.length;
     setResolverVolume('sfx', 0.4);
     expect(howlerState.volumeArgs).toHaveLength(volumeCallsAfterCleanup);
-    expect(instance?.off).toHaveBeenCalledWith('end', cleanup, id);
-    expect(instance?.off).toHaveBeenCalledWith('stop', cleanup, id);
-    expect(instance?.off).toHaveBeenCalledWith('playerror', cleanup, id);
+    expect(instance?.off).toHaveBeenCalledWith('end', endRegistration?.[1], id);
+    expect(instance?.off).toHaveBeenCalledWith('stop', expect.any(Function), id);
+    expect(instance?.off).toHaveBeenCalledWith('playerror', expect.any(Function), id);
   });
 
   it('rejects non-finite volume values', () => {

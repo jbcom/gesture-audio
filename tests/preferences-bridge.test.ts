@@ -67,6 +67,7 @@ import {
   registerFocusLossMute,
   setAndPersistBusMute,
   setAndPersistBusVolume,
+  setTransientAudioMute,
   syncAudioPrefsFromSettings,
 } from '../src';
 
@@ -396,5 +397,22 @@ describe('registerFocusLossMute', () => {
 
   it('does nothing when enabled without a store or bus list', () => {
     expect(() => registerFocusLossMute(true)).not.toThrow();
+  });
+});
+
+describe('setTransientAudioMute', () => {
+  it('applies a named runtime layer to Tone and Howler without persistence writes', () => {
+    const store = makeStore(makePrefs());
+    setTransientAudioMute(['music', 'sfx'], 'cutscene', true);
+    setTransientAudioMute(['music', 'sfx'], 'cutscene', false);
+
+    expect(busState.muteBusCalls).toContainEqual(['music', true]);
+    expect(busState.resolverMuteCalls).toContainEqual(['sfx', false]);
+    expect(store.update).not.toHaveBeenCalled();
+  });
+
+  it('rejects unnamed layers and invalid buses before changing engine layers', () => {
+    expect(() => setTransientAudioMute(['music'], '', true)).toThrow(/reason/);
+    expect(() => setTransientAudioMute([''], 'cutscene', true)).toThrow(/Bus names/);
   });
 });

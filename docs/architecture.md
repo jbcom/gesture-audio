@@ -29,6 +29,15 @@ process modules cannot enter a browser bundle.
   sliders cannot overwrite a newer runtime or persisted value with stale state.
 - Every active Howler sound retains its target bus so live volume and mute
   changes affect loops and long samples, not only future playback.
+- Cue gain and cue fades are logical layers: their output is recomposed with
+  current resolver master/bus gains and mute reasons on every update. A paused
+  cue freezes its fade clock and resumes with the same Howler ID.
+- Per-file codec declarations are consistent across all sprites that share a
+  Howl; the resolver never treats a failed codec HTTP request as a fallback.
+- Runtime-only mute layers apply by name to both Tone buses and the Howler
+  resolver without modifying persistence or manual mute layers. Tone duck
+  state remains independently remembered while a bus is muted, so it restores
+  consistently when the mute layer clears; Howler has no fake duck layer.
 - Public runtime imports do not evaluate Node-only build tooling.
 
 ## Lifecycle and cleanup

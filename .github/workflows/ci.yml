@@ -185,7 +185,12 @@ jobs:
         run: pnpm install --frozen-lockfile
       - name: Install audio verification tools
         if: needs.classify.outputs.skip-validation != 'true'
-        run: sudo apt-get update && sudo apt-get install --yes ffmpeg
+        # Audio fixtures need FFmpeg and ffprobe, not optional speech models or GPU drivers.
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes --no-install-recommends ffmpeg
+          ffmpeg -version
+          ffprobe -version
       - name: Lockfile is in sync
         if: needs.classify.outputs.skip-validation != 'true'
         run: |

@@ -4,6 +4,14 @@ Notable changes to this project are recorded here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and releases follow
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.0](https://github.com/jbcom/gesture-audio/compare/v0.3.0...v0.4.0) (2026-10-08)
+
+
+### Features
+
+* add lazy sprite loading ([f52160c](https://github.com/jbcom/gesture-audio/commit/f52160c15125685601c8c736bb0b6ec5e16fcc26))
+* add lazy sprite loading ([a865766](https://github.com/jbcom/gesture-audio/commit/a8657660ff6eca081fa558af61c335f54aeaa1e8))
+
 ## [0.3.0](https://github.com/jbcom/gesture-audio/compare/v0.2.4...v0.3.0) (2026-10-08)
 
 

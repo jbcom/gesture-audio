@@ -18,6 +18,8 @@
  * `setResolverMute` and `setResolverMasterBus`.
  */
 
+// Suspend / resume Howler's AudioContext
+export { setAudioSuspended } from './audio-context.js';
 // Gesture-gated lifecycle (Howler's AudioContext)
 export {
   _resetAudioEngine,

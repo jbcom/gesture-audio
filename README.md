@@ -124,14 +124,17 @@ Nothing reachable from this entry imports `tone` (a test and the packed-import
 smoke check both walk the module graph), so no Tone nodes or second context ever
 exist. It exports the sprite resolver (`initSpriteResolver`, `playCue`,
 `stopCue`, `setCueGain`, `pauseCue`, `resumeCue`, `fadeCue`, `setCuePosition`,
-`setAudioListener`, `setResolverVolume`, `setResolverMute`,
+`setAudioListener`, `setAudioSuspended`, `setResolverVolume`, `setResolverMute`,
 `setResolverMasterBus`, `disposeSpriteResolver`) and the same lifecycle names as
 the root entry, with the same contract:
 `registerAudioGestureTrigger(bootstrap)`, `startAudioEngine(bootstrap)` and
 `isAudioEngineStarted()`. The difference is the unlock step: on a click, keydown,
 touchstart or pointerdown it resumes Howler's own `AudioContext` (creating it
 first if Howler has not yet), then runs `bootstrap`. Attempts are serialized and
-a failed resume or bootstrap stays retryable. It does not include the Tone bus
+a failed resume or bootstrap stays retryable. `setAudioSuspended(true | false)`
+suspends or resumes Howler's context (for example when the app is backgrounded
+or foregrounded) so you never need to import `howler` for that; it is also
+exported from the root entry. It does not include the Tone bus
 graph or the preferences bridge, which drives that graph; mirror volume and mute
 into the resolver directly. Use one entry point or the other in an application,
 not both.

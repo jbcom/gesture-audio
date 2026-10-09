@@ -60,6 +60,7 @@ describe('gesture-audio/howler module graph', () => {
     expect(bare).toEqual(['howler']);
     expect(bare).not.toContain('tone');
     expect(files.map((file) => file.slice(SRC.length + 1))).toEqual([
+      'audio-context.ts',
       'howler-unlock.ts',
       'howler.ts',
       'sprite-resolver.ts',
@@ -131,6 +132,7 @@ describe('gesture-audio/howler exports', () => {
           'registerAudioGestureTrigger',
           'resumeCue',
           'setAudioListener',
+          'setAudioSuspended',
           'setCueGain',
           'setCuePosition',
           'setResolverMasterBus',

@@ -145,6 +145,18 @@ therefore still apply while the load is pending. A failed sheet removes its
 pending IDs without throwing from `playCue`; a later cue can request that sheet
 again.
 
+### `setAudioSuspended(suspended)`
+
+Returns a promise that resolves once Howler's `AudioContext` has been suspended
+(`true`) or resumed (`false`), for an application that is backgrounded or
+foregrounded. Suspending freezes the audio clock, so playing sprites, loops and
+fades hold their position. It is a no-op, and never throws, before Howler has
+created its context, when Howler fell back to HTML5 Audio, when the context is
+already in the requested state, and after the context is closed; a context that
+rejects the transition is left as it is. Resuming outside a user gesture may stay
+pending until the browser allows it. Exported from both `gesture-audio` and
+`gesture-audio/howler`, and it never imports Tone.
+
 ### `setAudioListener(position, forward, up?)`
 
 Sets the global Howler listener with public `Howler.pos` and

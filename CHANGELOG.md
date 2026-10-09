@@ -4,6 +4,15 @@ Notable changes to this project are recorded here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and releases follow
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.0](https://github.com/jbcom/gesture-audio/compare/v0.4.0...v0.5.0) (2026-10-09)
+
+
+### Features
+
+* add setAudioSuspended to suspend and resume Howler's AudioContext ([517169f](https://github.com/jbcom/gesture-audio/commit/517169fa4610138feb7aa4334b8535efbd5a78a4))
+* add the Howler-only entry, multiple sprite maps and per-cue panner attributes ([5adf0a8](https://github.com/jbcom/gesture-audio/commit/5adf0a87c2fc64149e28ae87852ef68e8a1fb765))
+* Howler-only entry, multiple sprite maps and per-cue panner attributes ([ebf34b6](https://github.com/jbcom/gesture-audio/commit/ebf34b69ad37512cb9c9048bcaf802765131846e))
+
 ## [0.4.0](https://github.com/jbcom/gesture-audio/compare/v0.3.0...v0.4.0) (2026-10-08)
 
 

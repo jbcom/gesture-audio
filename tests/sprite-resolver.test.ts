@@ -13,6 +13,7 @@ const howlerState = vi.hoisted(() => ({
   volumeArgs: [] as Array<[number, number]>,
   pauseArgs: [] as number[],
   positionArgs: [] as Array<[number, number, number, number]>,
+  pannerArgs: [] as Array<[Record<string, unknown>, number]>,
   listenerPositionArgs: [] as Array<[number, number, number]>,
   listenerOrientationArgs: [] as Array<[number, number, number, number, number, number]>,
   loadCalls: 0,
@@ -28,6 +29,7 @@ const howlerState = vi.hoisted(() => ({
     volume: ReturnType<typeof vi.fn>;
     pause: ReturnType<typeof vi.fn>;
     pos: ReturnType<typeof vi.fn>;
+    pannerAttr: ReturnType<typeof vi.fn>;
     load: ReturnType<typeof vi.fn>;
     on: ReturnType<typeof vi.fn>;
     once: ReturnType<typeof vi.fn>;
@@ -46,6 +48,7 @@ vi.mock('howler', () => {
     volume: ReturnType<typeof vi.fn>;
     pause: ReturnType<typeof vi.fn>;
     pos: ReturnType<typeof vi.fn>;
+    pannerAttr: ReturnType<typeof vi.fn>;
     load: ReturnType<typeof vi.fn>;
     on: ReturnType<typeof vi.fn>;
     once: ReturnType<typeof vi.fn>;
@@ -74,6 +77,9 @@ vi.mock('howler', () => {
       const pos = vi.fn((x: number, y: number, z: number, id: number) => {
         s.positionArgs.push([x, y, z, id]);
       });
+      const pannerAttr = vi.fn((attrs: Record<string, unknown>, id: number) => {
+        s.pannerArgs.push([attrs, id]);
+      });
       const load = vi.fn(() => {
         s.loadCalls += 1;
       });
@@ -88,13 +94,26 @@ vi.mock('howler', () => {
       this.volume = volume;
       this.pause = pause;
       this.pos = pos;
+      this.pannerAttr = pannerAttr;
       this.load = load;
       this.once = once;
       this.on = on;
       this.off = off;
       this.unload = unload;
       s.options.push({ sprite: opts.sprite, src: opts.src, preload: opts.preload });
-      s.instances.push({ play, stop, volume, pause, pos, load, on, once, off, unload });
+      s.instances.push({
+        play,
+        stop,
+        volume,
+        pause,
+        pos,
+        pannerAttr,
+        load,
+        on,
+        once,
+        off,
+        unload,
+      });
     }
   }
 
@@ -157,6 +176,7 @@ function resetHowlerState() {
   howlerState.volumeArgs.length = 0;
   howlerState.pauseArgs.length = 0;
   howlerState.positionArgs.length = 0;
+  howlerState.pannerArgs.length = 0;
   howlerState.listenerPositionArgs.length = 0;
   howlerState.listenerOrientationArgs.length = 0;
   howlerState.loadCalls = 0;
@@ -743,5 +763,224 @@ describe('bus volume and mute', () => {
     playCue('drawer-open', 'sfx');
     const volCall = howlerState.volumeArgs.at(-1);
     expect(volCall?.[0]).toBe(1);
+  });
+});
+
+function mockFetchByUrl(bodies: Record<string, unknown>): ReturnType<typeof vi.fn> {
+  const fetchMock = vi.fn(async (url: string) => {
+    if (!(url in bodies))
+      return { ok: false, status: 404, json: () => Promise.reject(new Error()) };
+    return { ok: true, status: 200, json: () => Promise.resolve(bodies[url]) };
+  });
+  vi.stubGlobal('fetch', fetchMock);
+  return fetchMock;
+}
+
+describe('initSpriteResolver with several sprite maps', () => {
+  beforeEach(() => {
+    resetHowlerState();
+    disposeSpriteResolver();
+  });
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.restoreAllMocks();
+    disposeSpriteResolver();
+  });
+
+  const UI_MAP = {
+    'drawer-open': { start_ms: 0, end_ms: 450, file: 'ui/sprite' },
+  };
+  const BELL_MAP_NESTED = {
+    'bell/sprite': { 'ring-bell': { start_ms: 0, end_ms: 1200, file: 'bell/sprite' } },
+  };
+
+  it('fetches every map and merges flat and grouped shapes into one cue map', async () => {
+    const fetchMock = mockFetchByUrl({ '/a.json': UI_MAP, '/b.json': BELL_MAP_NESTED });
+    await initSpriteResolver({ spriteMapUrls: ['/a.json', '/b.json'], strict: true });
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(Object.keys(_getCueMap()).sort()).toEqual(['drawer-open', 'ring-bell']);
+    expect(howlerState.instances).toHaveLength(2);
+    expect(playCue('ring-bell')).toBeGreaterThan(0);
+    expect(_getLastResolverOptions().spriteMapUrls).toEqual(['/a.json', '/b.json']);
+    expect(_getLastResolverOptions().spriteMapUrl).toBe('/a.json');
+  });
+
+  it('rejects a cue defined in two maps under strict, naming both maps', async () => {
+    mockFetchByUrl({
+      '/a.json': UI_MAP,
+      '/b.json': { 'drawer-open': { start_ms: 0, end_ms: 100, file: 'other/sprite' } },
+    });
+    await expect(
+      initSpriteResolver({ spriteMapUrls: ['/a.json', '/b.json'], strict: true }),
+    ).rejects.toThrow(
+      /\/b\.json: duplicate cue name "drawer-open" \(already defined by \/a\.json\)/,
+    );
+  });
+
+  it('keeps the first definition and warns when not strict', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    mockFetchByUrl({
+      '/a.json': UI_MAP,
+      '/b.json': { 'drawer-open': { start_ms: 0, end_ms: 100, file: 'other/sprite' } },
+    });
+    await initSpriteResolver({ spriteMapUrls: ['/a.json', '/b.json'] });
+    expect(_getCueMap()['drawer-open']?.file).toBe('ui/sprite');
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining('duplicate cue name "drawer-open"'));
+  });
+
+  it('prefixes per-map validation warnings with the map URL', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    mockFetchByUrl({
+      '/a.json': UI_MAP,
+      '/b.json': {
+        'ring-bell': { start_ms: 0, end_ms: 1200, file: 'bell/sprite' },
+        bad: { start_ms: 5, end_ms: 1, file: 'x' },
+      },
+    });
+    await initSpriteResolver({ spriteMapUrls: ['/a.json', '/b.json'] });
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining('/b.json: bad: invalid cue entry'));
+    expect(Object.keys(_getCueMap()).sort()).toEqual(['drawer-open', 'ring-bell']);
+  });
+
+  it('names the failing map when one of several requests fails', async () => {
+    mockFetchByUrl({ '/a.json': UI_MAP });
+    await expect(
+      initSpriteResolver({ spriteMapUrls: ['/a.json', '/missing.json'], strict: true }),
+    ).rejects.toThrow('sprite map request for /missing.json failed with HTTP 404');
+  });
+
+  it('degrades the whole resolver to empty when one map fails and not strict', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    mockFetchByUrl({ '/a.json': UI_MAP });
+    await initSpriteResolver({ spriteMapUrls: ['/a.json', '/missing.json'] });
+    expect(_getCueMap()).toEqual({});
+  });
+
+  it('validates the URL list', async () => {
+    await expect(initSpriteResolver({ spriteMapUrls: [] })).rejects.toThrow(/non-empty array/);
+    await expect(initSpriteResolver({ spriteMapUrls: ['/a.json', ' '] })).rejects.toThrow(
+      /non-empty strings/,
+    );
+    await expect(initSpriteResolver({ spriteMapUrls: ['/a.json', '/a.json'] })).rejects.toThrow(
+      /duplicate URLs/,
+    );
+    await expect(
+      initSpriteResolver({ spriteMapUrl: '/a.json', spriteMapUrls: ['/b.json'] }),
+    ).rejects.toThrow(/either spriteMapUrl or spriteMapUrls/);
+  });
+
+  it('treats a different URL list as different options', async () => {
+    mockFetchByUrl({ '/a.json': UI_MAP, '/b.json': BELL_MAP_NESTED });
+    await initSpriteResolver({ spriteMapUrls: ['/a.json', '/b.json'] });
+    await expect(initSpriteResolver({ spriteMapUrls: ['/b.json', '/a.json'] })).rejects.toThrow(
+      /different options/,
+    );
+    await expect(initSpriteResolver({ spriteMapUrls: ['/a.json'] })).rejects.toThrow(
+      /different options/,
+    );
+    await expect(
+      initSpriteResolver({ spriteMapUrls: ['/a.json', '/b.json'] }),
+    ).resolves.toBeUndefined();
+  });
+});
+
+describe('per-playback panner attributes', () => {
+  beforeEach(async () => {
+    resetHowlerState();
+    disposeSpriteResolver();
+    mockFetchWith(FLAT_SPRITE_MAP);
+  });
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    disposeSpriteResolver();
+  });
+
+  it('applies the cue panner to that sound id when a position is given', async () => {
+    await initSpriteResolver();
+    const id = playCue('drawer-open', {
+      position: [1, 2, 3],
+      panner: { panningModel: 'equalpower', refDistance: 2, maxDistance: 40 },
+    });
+    expect(howlerState.positionArgs).toEqual([[1, 2, 3, id]]);
+    expect(howlerState.pannerArgs).toEqual([
+      [{ panningModel: 'equalpower', refDistance: 2, maxDistance: 40 }, id],
+    ]);
+  });
+
+  it('applies defaultPanner when a position is given without a panner', async () => {
+    await initSpriteResolver({
+      defaultPanner: { panningModel: 'equalpower', distanceModel: 'linear', rolloffFactor: 1 },
+    });
+    const id = playCue('drawer-open', { position: [0, 0, -1] });
+    expect(howlerState.pannerArgs).toEqual([
+      [{ panningModel: 'equalpower', distanceModel: 'linear', rolloffFactor: 1 }, id],
+    ]);
+  });
+
+  it('merges a cue panner over defaultPanner field by field', async () => {
+    await initSpriteResolver({ defaultPanner: { panningModel: 'equalpower', refDistance: 1 } });
+    const id = playCue('drawer-open', { position: [0, 0, 0], panner: { refDistance: 5 } });
+    expect(howlerState.pannerArgs).toEqual([[{ panningModel: 'equalpower', refDistance: 5 }, id]]);
+  });
+
+  it('sends nothing to pannerAttr without a position or without any attributes', async () => {
+    await initSpriteResolver({ defaultPanner: { panningModel: 'equalpower' } });
+    playCue('drawer-open', { bus: 'sfx' });
+    expect(howlerState.pannerArgs).toHaveLength(0);
+    disposeSpriteResolver();
+    await initSpriteResolver();
+    playCue('drawer-open', { position: [0, 0, 0] });
+    expect(howlerState.pannerArgs).toHaveLength(0);
+  });
+
+  it('applies the requested panner once when a cue is positioned later', async () => {
+    await initSpriteResolver({ defaultPanner: { panningModel: 'equalpower' } });
+    const id = playCue('drawer-open', { panner: { rolloffFactor: 0.5 } });
+    expect(howlerState.pannerArgs).toHaveLength(0);
+    setCuePosition(id, [1, 0, 0]);
+    setCuePosition(id, [2, 0, 0]);
+    expect(howlerState.pannerArgs).toEqual([
+      [{ panningModel: 'equalpower', rolloffFactor: 0.5 }, id],
+    ]);
+  });
+
+  it('treats a different defaultPanner as different options', async () => {
+    await initSpriteResolver({ defaultPanner: { panningModel: 'equalpower' } });
+    await expect(initSpriteResolver({ defaultPanner: { panningModel: 'HRTF' } })).rejects.toThrow(
+      /different options/,
+    );
+    await expect(initSpriteResolver()).rejects.toThrow(/different options/);
+    expect(_getLastResolverOptions().defaultPanner).toEqual({ panningModel: 'equalpower' });
+  });
+
+  it.each([
+    [{ panningModel: 'surround' }, /panningModel/],
+    [{ distanceModel: 'cubic' }, /distanceModel/],
+    [{ refDistance: -1 }, /refDistance/],
+    [{ rolloffFactor: -0.1 }, /rolloffFactor/],
+    [{ maxDistance: 0 }, /maxDistance/],
+    [{ coneInnerAngle: 361 }, /coneInnerAngle/],
+    [{ coneOuterAngle: -1 }, /coneOuterAngle/],
+    [{ coneOuterGain: 1.5 }, /coneOuterGain/],
+  ])('rejects invalid panner %j', async (panner, message) => {
+    await initSpriteResolver();
+    expect(() => playCue('drawer-open', { position: [0, 0, 0], panner: panner as never })).toThrow(
+      message,
+    );
+    disposeSpriteResolver();
+    await expect(initSpriteResolver({ defaultPanner: panner as never })).rejects.toThrow(message);
+  });
+
+  it('rejects non-finite and non-object panner values', async () => {
+    await initSpriteResolver();
+    expect(() => playCue('drawer-open', { panner: { refDistance: Number.NaN } })).toThrow(/finite/);
+    expect(() => playCue('drawer-open', { panner: 'equalpower' as never })).toThrow(/object/);
+  });
+
+  it('passes cone attributes through unchanged', async () => {
+    await initSpriteResolver();
+    const panner = { coneInnerAngle: 90, coneOuterAngle: 180, coneOuterGain: 0.25 };
+    const id = playCue('drawer-open', { position: [0, 0, 0], panner });
+    expect(howlerState.pannerArgs).toEqual([[panner, id]]);
   });
 });

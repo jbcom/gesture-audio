@@ -60,6 +60,25 @@ segments or backslashes. A leading slash is ignored; it is not a cue namespace. 
 `/audio/ui/sprite.webm` and `/audio/ui/sprite.m4a`. Supply at least two formats
 that cover the browsers you support, and keep their cue offsets identical.
 
+## Several map files
+
+Pass `spriteMapUrls` instead of `spriteMapUrl` to keep cues in separate files and
+merge them at startup:
+
+```ts
+await initSpriteResolver({
+  spriteMapUrls: ['/audio/ui-map.json', '/audio/ambience-map.json'],
+  strict: true,
+});
+```
+
+Every URL is fetched, and flat and grouped maps may be mixed. Each cue name must
+be defined once across all of them: under `strict` a repeat is an error naming
+both maps, and otherwise the first definition (in array order) wins with a
+console warning. The rule that cues sharing a `file` agree on `formats` applies
+to the merged map. A failed request for any listed map fails initialization the
+way a single missing map does.
+
 ## Load only requested sheets
 
 `initSpriteResolver()` preserves its eager default and asks Howler to preload

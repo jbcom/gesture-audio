@@ -39,9 +39,14 @@ local-only convenience, not a CI dependency.
   output is checked by `scripts/check-sourcey-output.mjs`. The root `llms.txt`
   is repository orientation for coding agents; `docs/dist/llms*.txt` is the
   generated public-site context and must not be hand-maintained.
-- `src/index.ts` is the only supported runtime import path; it re-exports the
-  full public API from `buses.ts`, `init.ts`, `preferences-bridge.ts`, and
-  `sprite-resolver.ts`. `src/build-tools/index.ts` is a **separate** entry
+- `src/index.ts` is the full runtime import path; it re-exports the public API
+  from `buses.ts`, `init.ts`, `preferences-bridge.ts`, and
+  `sprite-resolver.ts`. `src/howler.ts` (`gesture-audio/howler`) is the
+  Howler-only runtime entry: lifecycle from `howler-unlock.ts` plus the sprite
+  resolver, and **nothing reachable from it may import `tone`** (a second
+  AudioContext). `tests/howler-entry.test.ts` and `scripts/smoke-imports.mjs`
+  enforce that; keep the Tone-specific code in `init.ts`/`buses.ts` and the
+  shared unlock logic in `unlock-controller.ts`. `src/build-tools/index.ts` is a **separate** entry
   point (`gesture-audio/build-tools`) so Node-only filesystem
   code never enters a browser bundle — never re-export it from the runtime
   entry point.

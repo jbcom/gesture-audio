@@ -45,6 +45,7 @@ export {
 export type {
   AudioPosition,
   NestedSpriteMap,
+  PannerOptions,
   PlayCueOptions,
   SpriteEntry,
   SpriteMap,

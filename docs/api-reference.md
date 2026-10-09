@@ -9,7 +9,20 @@ verifier only from `gesture-audio/build-tools`.
 | Entry point | Intended environment | Includes |
 | --- | --- | --- |
 | `gesture-audio` | Modern browser runtime; safe to import during SSR | lifecycle, Tone bus, resolver, and preferences APIs |
+| `gesture-audio/howler` | Modern browser runtime; safe to import during SSR | lifecycle (unlocking Howler's context) and resolver APIs; never imports `tone` |
 | `gesture-audio/build-tools` | Node.js 22, 24 and 26 build or CI process | audio-asset verification APIs |
+
+`gesture-audio/howler` is for applications that play pre-rendered audio through
+Howler sprites and build no Tone nodes. Its module graph is verified to contain
+no `tone` import, so only Howler's `AudioContext` exists. It exports the
+`startAudioEngine`, `registerAudioGestureTrigger`, `isAudioEngineStarted` and
+`_resetAudioEngine` names with the contract below, except that the unlock step
+resumes Howler's context (creating it if needed, or doing nothing when Howler has
+fallen back to HTML5 Audio) instead of calling `Tone.start()`, and the gesture
+trigger also listens for `pointerdown`. It also exports the whole
+[sprite resolver](#sprite-resolver). It omits the Tone bus graph and the
+preferences bridge. Use one entry point or the other in an application, never
+both.
 
 Underscored exports (`_resetAudioEngine`, `_getCueMap`, `_getLastResolverOptions`,
 and `_getMasterBusName`) support tests and hot reload. Do not use them as
@@ -81,6 +94,8 @@ initialization requires `disposeSpriteResolver()` first.
 | Option | Default | Contract |
 | --- | --- | --- |
 | `spriteMapUrl` | `/audio/sprite-map.json` | Non-empty URL for the JSON map. |
+| `spriteMapUrls` | none | Non-empty array of distinct, non-empty URLs, fetched and merged into one cue map; use instead of `spriteMapUrl` (passing both throws). A cue defined in more than one map is an error under `strict`; otherwise the first definition wins and a warning names both maps. A failed request for any map fails the initialization. |
+| `defaultPanner` | none | `PannerOptions` applied to any `playCue` that gives a `position` without its own `panner`. Changing it requires `disposeSpriteResolver()` first. |
 | `audioBaseUrl` | `/audio` | Non-empty base path for sprite files. |
 | `formats` | `['webm', 'm4a']` | Non-empty list of letter/digit extensions, in Howler preference order. |
 | `preload` | `true` | When `false`, validates the JSON map and creates sheet definitions without fetching or decoding audio. The first `playCue` for each sheet queues playback and calls public `Howl.load()` for that sheet. |
@@ -102,6 +117,17 @@ when the resolver is not ready, the cue is absent, or its sheet is unavailable.
 `{ bus?, gain?, position?: readonly [x, y, z] }`. Logical `gain` is clamped to
 `0..1` and composes with current master and target-bus gains and mutes. A
 position is sent through Howler's public spatial API.
+
+`panner` (`PannerOptions`: `panningModel`, `distanceModel`, `refDistance`,
+`rolloffFactor`, `maxDistance`, `coneInnerAngle`, `coneOuterAngle`,
+`coneOuterGain`, all optional) is applied with Howler's `pannerAttr` for that
+sound ID whenever a position is given, merged field by field over the resolver's
+`defaultPanner`. If the cue is positioned later with `setCuePosition`, the
+attributes are applied then, once. Values are validated (`refDistance` and
+`rolloffFactor` `>= 0`, `maxDistance` `> 0`, cone angles `0..360`,
+`coneOuterGain` `0..1`, models from the Web Audio enums) and invalid ones throw.
+Howler's defaults are HRTF panning and no maximum distance; `equalpower` is much
+cheaper on the audio thread.
 
 `stopCue(id)` stops an active, non-negative ID and is otherwise a no-op.
 `setCueGain(id, gain)` updates one active cue's logical gain and returns whether

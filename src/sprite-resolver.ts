@@ -52,9 +52,46 @@ export type SpriteMap = Record<string, SpriteEntry>;
 /** Nested map: spriteFile → { cueName → entry } */
 export type NestedSpriteMap = Record<string, Record<string, SpriteEntry>>;
 
+/**
+ * Web Audio panner attributes applied to one spatialized playback through
+ * Howler's `pannerAttr`. Every field is optional; an omitted field keeps
+ * Howler's own default (HRTF panning, `inverse` distance model, `refDistance`
+ * 1, `rolloffFactor` 1, `maxDistance` 10000, 360/360/0 cone).
+ */
+export interface PannerOptions {
+  /** `equalpower` is far cheaper on the audio thread than Howler's default `HRTF`. */
+  panningModel?: PanningModelType;
+  distanceModel?: DistanceModelType;
+  /** Distance at which attenuation begins. Must be `>= 0`. */
+  refDistance?: number;
+  /** How quickly volume falls with distance. Must be `>= 0`. */
+  rolloffFactor?: number;
+  /** Distance beyond which the `linear` model stops attenuating. Must be `> 0`. */
+  maxDistance?: number;
+  /** Degrees (`0..360`) of the cone inside which volume is not reduced. */
+  coneInnerAngle?: number;
+  /** Degrees (`0..360`) outside which volume is `coneOuterGain`. */
+  coneOuterAngle?: number;
+  /** Gain (`0..1`) applied outside `coneOuterAngle`. */
+  coneOuterGain?: number;
+}
+
 export interface SpriteResolverOptions {
   /** URL to fetch the sprite map JSON from. Default: '/audio/sprite-map.json' */
   spriteMapUrl?: string;
+  /**
+   * Several sprite-map URLs to fetch and merge into one cue map, instead of
+   * `spriteMapUrl` (setting both is an error). Flat and file-grouped maps may be
+   * mixed. A cue defined in more than one map is an error under `strict`;
+   * otherwise the first definition (in array order) wins with a warning.
+   * A failed fetch of any listed map fails the whole initialization.
+   */
+  spriteMapUrls?: readonly string[];
+  /**
+   * Panner attributes used for any `playCue` that gives a `position` but no
+   * `panner` of its own (and the base a per-cue `panner` is merged over).
+   */
+  defaultPanner?: PannerOptions;
   /**
    * File extensions to probe for each sprite sheet, in preference order.
    * Passed straight to Howler's `src` array as `${audioBaseUrl}/${file}.${ext}`.
@@ -85,6 +122,12 @@ export interface PlayCueOptions {
   gain?: number;
   /** Optional Howler spatial position for this playback. */
   position?: AudioPosition;
+  /**
+   * Panner attributes for this playback, applied with Howler's `pannerAttr` for
+   * this sound id when a position is given (here, or later via
+   * `setCuePosition`). Fields merge over `defaultPanner`.
+   */
+  panner?: PannerOptions;
 }
 
 const DEFAULT_SPRITE_MAP_URL = '/audio/sprite-map.json';
@@ -111,6 +154,10 @@ interface ActiveSound {
   howl: Howl;
   bus: string;
   gain: number;
+  /** Resolved panner attributes (default merged with per-cue); empty when none. */
+  panner: PannerOptions;
+  /** Whether `panner` has been pushed to Howler for this sound id. */
+  pannerApplied: boolean;
   loop: boolean;
   paused: boolean;
   fade: FadeState | null;
@@ -314,43 +361,197 @@ function _buildHowlForFile(
   });
 }
 
-type NormalizedResolverOptions = Required<SpriteResolverOptions>;
+const PANNING_MODELS: readonly PanningModelType[] = ['HRTF', 'equalpower'];
+const DISTANCE_MODELS: readonly DistanceModelType[] = ['exponential', 'inverse', 'linear'];
+
+function assertPannerNumber(
+  value: number | undefined,
+  label: string,
+  valid: (n: number) => boolean,
+  requirement: string,
+): number | undefined {
+  if (value === undefined) return undefined;
+  assertFinite(value, label);
+  if (!valid(value)) throw new RangeError(`${label} must be ${requirement}`);
+  return value;
+}
+
+/**
+ * Validate panner attributes and copy the defined fields in a fixed key order
+ * (so two equivalent option objects compare equal).
+ */
+function normalizePanner(panner: PannerOptions | undefined, label: string): PannerOptions {
+  if (panner === undefined) return {};
+  if (panner === null || typeof panner !== 'object' || Array.isArray(panner)) {
+    throw new TypeError(`${label} must be an object`);
+  }
+  if (panner.panningModel !== undefined && !PANNING_MODELS.includes(panner.panningModel)) {
+    throw new TypeError(`${label}.panningModel must be one of ${PANNING_MODELS.join(', ')}`);
+  }
+  if (panner.distanceModel !== undefined && !DISTANCE_MODELS.includes(panner.distanceModel)) {
+    throw new TypeError(`${label}.distanceModel must be one of ${DISTANCE_MODELS.join(', ')}`);
+  }
+  const angle = (n: number): boolean => n >= 0 && n <= 360;
+  const fields: PannerOptions = {
+    panningModel: panner.panningModel,
+    distanceModel: panner.distanceModel,
+    refDistance: assertPannerNumber(
+      panner.refDistance,
+      `${label}.refDistance`,
+      (n) => n >= 0,
+      'greater than or equal to 0',
+    ),
+    rolloffFactor: assertPannerNumber(
+      panner.rolloffFactor,
+      `${label}.rolloffFactor`,
+      (n) => n >= 0,
+      'greater than or equal to 0',
+    ),
+    maxDistance: assertPannerNumber(
+      panner.maxDistance,
+      `${label}.maxDistance`,
+      (n) => n > 0,
+      'greater than 0',
+    ),
+    coneInnerAngle: assertPannerNumber(
+      panner.coneInnerAngle,
+      `${label}.coneInnerAngle`,
+      angle,
+      'between 0 and 360',
+    ),
+    coneOuterAngle: assertPannerNumber(
+      panner.coneOuterAngle,
+      `${label}.coneOuterAngle`,
+      angle,
+      'between 0 and 360',
+    ),
+    coneOuterGain: assertPannerNumber(
+      panner.coneOuterGain,
+      `${label}.coneOuterGain`,
+      (n) => n >= 0 && n <= 1,
+      'between 0 and 1',
+    ),
+  };
+  return Object.fromEntries(
+    Object.entries(fields).filter(([, value]) => value !== undefined),
+  ) as PannerOptions;
+}
+
+/** Per-cue panner fields win over the resolver default, field by field. */
+function resolvePanner(defaults: PannerOptions, perCue: PannerOptions): PannerOptions {
+  return { ...defaults, ...perCue };
+}
+
+interface NormalizedResolverOptions {
+  spriteMapUrls: string[];
+  formats: string[];
+  audioBaseUrl: string;
+  preload: boolean;
+  strict: boolean;
+  defaultPanner: PannerOptions;
+}
 
 let _lastOptions: NormalizedResolverOptions = {
-  spriteMapUrl: DEFAULT_SPRITE_MAP_URL,
+  spriteMapUrls: [DEFAULT_SPRITE_MAP_URL],
   formats: DEFAULT_FORMATS,
   audioBaseUrl: DEFAULT_AUDIO_BASE_URL,
   preload: true,
   strict: false,
+  defaultPanner: {},
 };
+
+function normalizeSpriteMapUrls(opts: SpriteResolverOptions): string[] {
+  if (opts.spriteMapUrls === undefined) {
+    const url = opts.spriteMapUrl ?? DEFAULT_SPRITE_MAP_URL;
+    if (url.trim().length === 0) throw new TypeError('spriteMapUrl must not be empty');
+    return [url];
+  }
+  if (opts.spriteMapUrl !== undefined) {
+    throw new TypeError('Pass either spriteMapUrl or spriteMapUrls, not both');
+  }
+  const urls = opts.spriteMapUrls;
+  if (!Array.isArray(urls) || urls.length === 0) {
+    throw new TypeError('spriteMapUrls must be a non-empty array');
+  }
+  if (urls.some((url) => typeof url !== 'string' || url.trim().length === 0)) {
+    throw new TypeError('spriteMapUrls must contain only non-empty strings');
+  }
+  if (new Set(urls).size !== urls.length) {
+    throw new TypeError('spriteMapUrls must not contain duplicate URLs');
+  }
+  return [...urls];
+}
 
 function normalizeOptions(opts: SpriteResolverOptions): NormalizedResolverOptions {
   const formats = normalizeFormats(opts.formats ?? DEFAULT_FORMATS, 'formats');
-  const spriteMapUrl = opts.spriteMapUrl ?? DEFAULT_SPRITE_MAP_URL;
+  const spriteMapUrls = normalizeSpriteMapUrls(opts);
   const audioBaseUrl = opts.audioBaseUrl ?? DEFAULT_AUDIO_BASE_URL;
-  if (spriteMapUrl.trim().length === 0) throw new TypeError('spriteMapUrl must not be empty');
   if (audioBaseUrl.trim().length === 0) throw new TypeError('audioBaseUrl must not be empty');
   if (opts.preload !== undefined && typeof opts.preload !== 'boolean') {
     throw new TypeError('preload must be a boolean');
   }
   return {
-    spriteMapUrl,
+    spriteMapUrls,
     formats,
     audioBaseUrl,
     preload: opts.preload ?? true,
     strict: opts.strict ?? false,
+    defaultPanner: normalizePanner(opts.defaultPanner, 'defaultPanner'),
   };
 }
 
 function optionsEqual(a: NormalizedResolverOptions, b: NormalizedResolverOptions): boolean {
   return (
-    a.spriteMapUrl === b.spriteMapUrl &&
     a.audioBaseUrl === b.audioBaseUrl &&
     a.preload === b.preload &&
     a.strict === b.strict &&
+    a.spriteMapUrls.length === b.spriteMapUrls.length &&
+    a.spriteMapUrls.every((url, index) => url === b.spriteMapUrls[index]) &&
     a.formats.length === b.formats.length &&
-    a.formats.every((format, index) => format === b.formats[index])
+    a.formats.every((format, index) => format === b.formats[index]) &&
+    JSON.stringify(a.defaultPanner) === JSON.stringify(b.defaultPanner)
   );
+}
+
+/**
+ * Fetch every sprite map and merge them into one flat cue map. Within one map
+ * `_flattenMap` already reports duplicates; across maps the first definition
+ * (in URL order) wins and each later redefinition is reported as a warning,
+ * which `strict` turns into an error.
+ */
+async function _loadMergedMap(
+  urls: readonly string[],
+): Promise<{ map: SpriteMap; warnings: string[] }> {
+  const raws = await Promise.all(
+    urls.map(async (url) => {
+      const res = await fetch(url);
+      if (!res.ok) {
+        const where = urls.length > 1 ? ` for ${url}` : '';
+        throw new Error(`sprite map request${where} failed with HTTP ${res.status}`);
+      }
+      return (await res.json()) as unknown;
+    }),
+  );
+  const merged = Object.create(null) as SpriteMap;
+  const origin = new Map<string, string>();
+  const warnings: string[] = [];
+  raws.forEach((raw, index) => {
+    const url = urls[index] ?? '';
+    const parsed = _flattenMap(raw);
+    const prefix = urls.length > 1 ? `${url}: ` : '';
+    for (const warning of parsed.warnings) warnings.push(`${prefix}${warning}`);
+    for (const [cue, entry] of Object.entries(parsed.map)) {
+      if (Object.hasOwn(merged, cue)) {
+        warnings.push(
+          `${url}: duplicate cue name "${cue}" (already defined by ${origin.get(cue)})`,
+        );
+        continue;
+      }
+      merged[cue] = entry;
+      origin.set(cue, url);
+    }
+  });
+  return { map: merged, warnings };
 }
 
 /**
@@ -374,12 +575,7 @@ export async function initSpriteResolver(opts: SpriteResolverOptions = {}): Prom
   const attempt = (async () => {
     const createdHowls = new Map<string, Howl>();
     try {
-      const res = await fetch(normalized.spriteMapUrl);
-      if (!res.ok) {
-        throw new Error(`sprite map request failed with HTTP ${res.status}`);
-      }
-      const raw: unknown = await res.json();
-      const parsed = _flattenMap(raw);
+      const parsed = await _loadMergedMap(normalized.spriteMapUrls);
       const validated = _validateFileFormats(parsed.map, normalized.formats);
       const warnings = [...parsed.warnings, ...validated.warnings];
       if (warnings.length > 0) {
@@ -452,6 +648,7 @@ export function playCue(cueName: string, target: string | PlayCueOptions = 'sfx'
   if (bus.trim().length === 0) throw new Error('Bus name must not be empty');
   const gain = normalizeGain(options.gain ?? 1, 'gain');
   if (options.position) assertPosition(options.position, 'position');
+  const cuePanner = normalizePanner(options.panner, 'panner');
 
   const entry = _cueMap[cueName];
   if (!entry) {
@@ -468,6 +665,10 @@ export function playCue(cueName: string, target: string | PlayCueOptions = 'sfx'
     bus,
     gain,
     loop: entry.loop === true,
+    // Resolved now so a later setCuePosition on a cue played without a position
+    // still gets the attributes this playback asked for.
+    panner: resolvePanner(_lastOptions.defaultPanner, cuePanner),
+    pannerApplied: false,
     paused: false,
     fade: null,
     cleanup: null,
@@ -498,7 +699,10 @@ export function playCue(cueName: string, target: string | PlayCueOptions = 'sfx'
   active.cleanup = cleanup;
   _activeSounds.set(id, active);
   howl.volume(_effectiveVolume(bus, gain), id);
-  if (options.position) howl.pos(...options.position, id);
+  if (options.position) {
+    howl.pos(...options.position, id);
+    _applyPanner(id, active);
+  }
   howl.on('end', endHandler, id);
   howl.once('stop', cleanup, id);
   howl.once('playerror', cleanup, id);
@@ -582,6 +786,7 @@ export function setCuePosition(id: number, position: AudioPosition): boolean {
   const active = _activeSounds.get(id);
   if (!active) return false;
   active.howl.pos(...position, id);
+  _applyPanner(id, active);
   return true;
 }
 
@@ -641,6 +846,15 @@ export function setResolverMasterBus(bus: string | null): void {
   if (bus !== null && bus.trim().length === 0) throw new Error('Master bus must not be empty');
   _masterBus = bus;
   _refreshActiveSounds();
+}
+
+/** Push resolved panner attributes to Howler once per sound, when it has any. */
+function _applyPanner(id: number, active: ActiveSound): void {
+  if (active.pannerApplied || Object.keys(active.panner).length === 0) return;
+  active.pannerApplied = true;
+  // @types/howler narrows distanceModel to "inverse" | "linear"; Howler assigns
+  // the value straight to the PannerNode, which also accepts "exponential".
+  active.howl.pannerAttr(active.panner as Parameters<Howl['pannerAttr']>[0], id);
 }
 
 function _refreshActiveSounds(): void {
@@ -728,7 +942,18 @@ export function _getCueMap(): SpriteMap {
   return Object.fromEntries(Object.entries(_cueMap).map(([cue, entry]) => [cue, { ...entry }]));
 }
 
-/** Exposed for testing/introspection. */
+/**
+ * Exposed for testing/introspection. `spriteMapUrl` is the first configured
+ * URL; `spriteMapUrls` is always the full list.
+ */
 export function _getLastResolverOptions(): Required<SpriteResolverOptions> {
-  return { ..._lastOptions, formats: [..._lastOptions.formats] };
+  return {
+    spriteMapUrl: _lastOptions.spriteMapUrls[0] ?? DEFAULT_SPRITE_MAP_URL,
+    spriteMapUrls: [..._lastOptions.spriteMapUrls],
+    formats: [..._lastOptions.formats],
+    audioBaseUrl: _lastOptions.audioBaseUrl,
+    preload: _lastOptions.preload,
+    strict: _lastOptions.strict,
+    defaultPanner: { ..._lastOptions.defaultPanner },
+  };
 }

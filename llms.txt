@@ -24,6 +24,8 @@ Install: `npm install gesture-audio tone howler` (`tone` and
 ## Public API entry points
 
 - `gesture-audio` — the runtime import (browser-safe).
+- `gesture-audio/howler` — Howler-only runtime (lifecycle that unlocks
+  Howler's AudioContext, plus the sprite resolver); never imports `tone`.
 - `gesture-audio/build-tools` — Node-only asset verification
   (`verifySprites`, `runVerifySpritesCli`); never imported from the runtime
   entry point.

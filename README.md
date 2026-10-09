@@ -34,6 +34,8 @@ npm install gesture-audio tone howler
 ```
 
 `tone` and `howler` are peer dependencies, so the application owns their versions.
+`tone` is an optional peer: an application that plays everything through Howler
+sprites can skip it and import [`gesture-audio/howler`](#howler-only-entry-point).
 
 ## Compatibility
 
@@ -89,6 +91,54 @@ complete local-storage-backed example. The published documentation has a
 [complete integration guide](https://jonbogaty.com/gesture-audio/integration/)
 covering teardown, strictness, SSR boundaries, and the intended lifecycle.
 
+## Howler-only entry point
+
+Importing the root entry loads Tone.js, which creates its own `AudioContext`
+beside Howler's. An application that renders its sounds ahead of time and plays
+them as Howler sprite cues needs only one context, so it should import
+`gesture-audio/howler` instead:
+
+```ts
+import {
+  initSpriteResolver,
+  playCue,
+  registerAudioGestureTrigger,
+  setResolverMasterBus,
+  setResolverVolume,
+} from 'gesture-audio/howler';
+
+async function bootstrapAudio() {
+  setResolverMasterBus('master');
+  setResolverVolume('master', 0.8);
+  await initSpriteResolver({
+    spriteMapUrls: ['/audio/ui-sprite-map.json', '/audio/ambience-sprite-map.json'],
+    audioBaseUrl: '/audio',
+    strict: true,
+  });
+}
+
+registerAudioGestureTrigger(bootstrapAudio);
+```
+
+Nothing reachable from this entry imports `tone` (a test and the packed-import
+smoke check both walk the module graph), so no Tone nodes or second context ever
+exist. It exports the sprite resolver (`initSpriteResolver`, `playCue`,
+`stopCue`, `setCueGain`, `pauseCue`, `resumeCue`, `fadeCue`, `setCuePosition`,
+`setAudioListener`, `setAudioSuspended`, `setResolverVolume`, `setResolverMute`,
+`setResolverMasterBus`, `disposeSpriteResolver`) and the same lifecycle names as
+the root entry, with the same contract:
+`registerAudioGestureTrigger(bootstrap)`, `startAudioEngine(bootstrap)` and
+`isAudioEngineStarted()`. The difference is the unlock step: on a click, keydown,
+touchstart or pointerdown it resumes Howler's own `AudioContext` (creating it
+first if Howler has not yet), then runs `bootstrap`. Attempts are serialized and
+a failed resume or bootstrap stays retryable. `setAudioSuspended(true | false)`
+suspends or resumes Howler's context (for example when the app is backgrounded
+or foregrounded) so you never need to import `howler` for that; it is also
+exported from the root entry. It does not include the Tone bus
+graph or the preferences bridge, which drives that graph; mirror volume and mute
+into the resolver directly. Use one entry point or the other in an application,
+not both.
+
 ## Sprite maps
 
 Both flat and file-grouped maps are accepted. Times are milliseconds and
@@ -110,6 +160,30 @@ The default formats are `webm` and `m4a`. Invalid offsets, empty file names,
 duplicates, and malformed entries are filtered with an actionable warning.
 Use `strict: true` in production bootstrap or tests to reject the entire map
 instead. A missing map degrades to a no-op resolver by default.
+
+To split cues across several files (for example one per feature), pass
+`spriteMapUrls` instead of `spriteMapUrl`. All maps are fetched, flat and
+grouped shapes may be mixed, and they merge into one cue map. A cue name defined
+in more than one map is an error under `strict`; otherwise the first definition
+(in array order) wins and a warning names both maps. A failed request for any
+listed map fails the whole initialization, the same way a single missing map
+does.
+
+### Spatial playback
+
+A `playCue` call that gives a `position` can also give `panner` attributes, and
+`initSpriteResolver` accepts `defaultPanner` for cues that give a position
+without their own. They are applied with Howler's `pannerAttr` for that sound
+only. Howler's own defaults are HRTF panning with no maximum distance, which is
+costly on the audio thread; most games want equal-power panning:
+
+```ts
+await initSpriteResolver({
+  defaultPanner: { panningModel: 'equalpower', distanceModel: 'linear', refDistance: 1, maxDistance: 30 },
+});
+playCue('door-slam', { position: [4, 0, -2] }); // uses defaultPanner
+playCue('torch-crackle', { position: [1, 1, 0], panner: { maxDistance: 8 } }); // merged over it
+```
 
 ## Preferences contract
 
@@ -137,7 +211,7 @@ applying runtime mute behavior.
 
 | Area | Exports |
 | --- | --- |
-| Lifecycle | `startAudioEngine`, `registerAudioGestureTrigger`, `isAudioEngineStarted` |
+| Lifecycle | `startAudioEngine`, `registerAudioGestureTrigger`, `isAudioEngineStarted` (also from `gesture-audio/howler`, unlocking Howler's context instead of Tone's) |
 | Tone buses | `buildBuses`, `getBuses`, `setBusVolume`, `muteBus`, `duckBus`, `disposeBuses` |
 | Sprites | `initSpriteResolver`, `playCue`, `stopCue`, `setResolverVolume`, `setResolverMute`, `setResolverMasterBus`, `disposeSpriteResolver` |
 | Preferences | `applyPersistedAudioPrefs`, `setAndPersistBusVolume`, `setAndPersistBusMute`, `syncAudioPrefsFromSettings`, `registerFocusLossMute` |

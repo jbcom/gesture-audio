@@ -16,6 +16,16 @@
         "default": "./dist/cjs/index.cjs"
       }
     },
+    "./howler": {
+      "import": {
+        "types": "./dist/types/howler.d.ts",
+        "default": "./dist/esm/howler.js"
+      },
+      "require": {
+        "types": "./dist/types-cjs/howler.d.cts",
+        "default": "./dist/cjs/howler.cjs"
+      }
+    },
     "./build-tools": {
       "import": {
         "types": "./dist/types/build-tools/index.d.ts",
@@ -67,6 +77,11 @@
     "howler": "^2.2.4",
     "tone": "^15.0.0"
   },
+  "peerDependenciesMeta": {
+    "tone": {
+      "optional": true
+    }
+  },
   "devDependencies": {
     "@arethetypeswrong/cli": "^0.18.5",
     "@biomejs/biome": "^2.5.10",
@@ -110,6 +125,9 @@
   "author": "Jon Bogaty <jon@jonbogaty.com>",
   "typesVersions": {
     "*": {
+      "howler": [
+        "./dist/types/howler.d.ts"
+      ],
       "build-tools": [
         "./dist/types/build-tools/index.d.ts"
       ]

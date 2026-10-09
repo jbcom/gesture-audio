@@ -13,6 +13,12 @@ The package is four focused layers with no application singleton:
 4. `preferences-bridge.ts` translates persisted percentages and mute policy into
    the two runtime engines without owning persistence.
 
+`unlock-controller.ts` holds the engine-agnostic half of `init.ts` (one shared
+in-flight attempt, retry, generation-based reset, gesture listeners). `init.ts`
+adds the Tone unlock step and is imported only by the root entry;
+`howler-unlock.ts` adds the Howler unlock step for the `gesture-audio/howler`
+entry, whose module graph must never reach `tone`.
+
 The Node-only `build-tools` export is a separate entry point so filesystem and
 process modules cannot enter a browser bundle.
 

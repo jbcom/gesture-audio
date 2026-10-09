@@ -9,6 +9,8 @@
  * Import from here, not from sub-modules directly.
  */
 
+// Suspend / resume Howler's AudioContext (same function as gesture-audio/howler)
+export { setAudioSuspended } from './audio-context.js';
 // Bus topology (Tone.js)
 export {
   _getMasterBusName,
@@ -21,7 +23,6 @@ export {
   muteBus,
   setBusVolume,
 } from './buses.js';
-
 // Gesture-gated lifecycle
 export {
   _resetAudioEngine,
@@ -45,6 +46,7 @@ export {
 export type {
   AudioPosition,
   NestedSpriteMap,
+  PannerOptions,
   PlayCueOptions,
   SpriteEntry,
   SpriteMap,

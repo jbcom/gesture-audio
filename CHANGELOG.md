@@ -4,6 +4,21 @@ Notable changes to this project are recorded here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and releases follow
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.7.0](https://github.com/jbcom/gesture-audio/compare/v0.6.0...v0.7.0) (2026-10-10)
+
+
+### Features
+
+* **peers:** make howler an optional peer, as the lazy Tone entry never imports it ([0f8bb2a](https://github.com/jbcom/gesture-audio/commit/0f8bb2a5a6ae370a19b13d4528a1b9cb5fc5409b))
+* **tone-lazy:** suspend and resume Tone's context with setToneLazySuspended ([69192e8](https://github.com/jbcom/gesture-audio/commit/69192e80d75bd47751b42cb2d1838ddeee819da2))
+* **tone-lazy:** Tone suspend, and howler as an optional peer ([3629265](https://github.com/jbcom/gesture-audio/commit/3629265e9b97a7cea96fb9c36119def87f235906))
+
+
+### Bug Fixes
+
+* **tone:** a request made as a reconciliation ends is not swallowed ([60914bb](https://github.com/jbcom/gesture-audio/commit/60914bbc398d1267ebc4f0ccd6aa2f89db6b96eb))
+* **tone:** the context ends in the latest suspend request, and an offline one is left alone ([c415646](https://github.com/jbcom/gesture-audio/commit/c415646065b8e1d3baf71e977d2b1008136bb3a4))
+
 ## [0.6.0](https://github.com/jbcom/gesture-audio/compare/v0.5.0...v0.6.0) (2026-10-10)
 
 

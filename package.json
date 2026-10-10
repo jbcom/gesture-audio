@@ -26,6 +26,16 @@
         "default": "./dist/cjs/howler.cjs"
       }
     },
+    "./tone-lazy": {
+      "import": {
+        "types": "./dist/types/tone-lazy.d.ts",
+        "default": "./dist/esm/tone-lazy.js"
+      },
+      "require": {
+        "types": "./dist/types-cjs/tone-lazy.d.cts",
+        "default": "./dist/cjs/tone-lazy.cjs"
+      }
+    },
     "./build-tools": {
       "import": {
         "types": "./dist/types/build-tools/index.d.ts",
@@ -127,6 +137,9 @@
     "*": {
       "howler": [
         "./dist/types/howler.d.ts"
+      ],
+      "tone-lazy": [
+        "./dist/types/tone-lazy.d.ts"
       ],
       "build-tools": [
         "./dist/types/build-tools/index.d.ts"

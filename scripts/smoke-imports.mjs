@@ -6,9 +6,11 @@ import { fileURLToPath } from 'node:url';
 const require = createRequire(import.meta.url);
 const esmRuntime = await import('../dist/esm/index.js');
 const esmHowler = await import('../dist/esm/howler.js');
+const esmToneLazy = await import('../dist/esm/tone-lazy.js');
 const esmBuildTools = await import('../dist/esm/build-tools/index.js');
 const cjsRuntime = require('../dist/cjs/index.cjs');
 const cjsHowler = require('../dist/cjs/howler.cjs');
+const cjsToneLazy = require('../dist/cjs/tone-lazy.cjs');
 const cjsBuildTools = require('../dist/cjs/build-tools/index.cjs');
 
 const checks = [
@@ -16,6 +18,8 @@ const checks = [
   ['CommonJS runtime', cjsRuntime.startAudioEngine],
   ['ESM Howler-only runtime', esmHowler.startAudioEngine],
   ['CommonJS Howler-only runtime', cjsHowler.startAudioEngine],
+  ['ESM lazy Tone runtime', esmToneLazy.startToneLazyEngine],
+  ['CommonJS lazy Tone runtime', cjsToneLazy.startToneLazyEngine],
   ['ESM Howler-only resolver', esmHowler.playCue],
   ['CommonJS Howler-only resolver', cjsHowler.playCue],
   ['ESM build tools', esmBuildTools.verifySprites],

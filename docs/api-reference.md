@@ -10,6 +10,7 @@ verifier only from `gesture-audio/build-tools`.
 | --- | --- | --- |
 | `gesture-audio` | Modern browser runtime; safe to import during SSR | lifecycle, Tone bus, resolver, and preferences APIs |
 | `gesture-audio/howler` | Modern browser runtime; safe to import during SSR | lifecycle (unlocking Howler's context) and resolver APIs; never imports `tone` |
+| `gesture-audio/tone-lazy` | Modern browser runtime; safe to import during SSR | asynchronous Tone lifecycle and post-unlock bus runtime; does not evaluate Tone while imported |
 | `gesture-audio/build-tools` | Node.js 22, 24 and 26 build or CI process | audio-asset verification APIs |
 
 `gesture-audio/howler` is for applications that play pre-rendered audio through
@@ -27,6 +28,50 @@ both.
 Underscored exports (`_resetAudioEngine`, `_getCueMap`, `_getLastResolverOptions`,
 and `_getMasterBusName`) support tests and hot reload. Do not use them as
 application integration APIs.
+
+## Lazy Tone lifecycle
+
+`gesture-audio/tone-lazy` is for a Tone application that must be mounted before
+the browser permits audio. Its module import does not evaluate Tone or create an
+`AudioContext`. Use this entry instead of the root entry for that application;
+the root entry deliberately retains its synchronous Tone bus API for existing
+consumers.
+
+The consumer must also defer its own Tone-dependent synthesizers, effects, and
+voice imports until the lifecycle bootstrap runs. A static `tone` import or a
+module that creates Tone nodes during application startup defeats this entry's
+deferred-context guarantee.
+
+```ts
+import { registerToneLazyGestureTrigger } from 'gesture-audio/tone-lazy';
+
+const removeAudioTrigger = registerToneLazyGestureTrigger(async (audio) => {
+  audio.buildBuses(['master', 'sfx']);
+  audio.getBuses().sfx.gain.gain.value = 0.8;
+});
+```
+
+### `startToneLazyEngine(bootstrap)`
+
+Dynamically loads Tone, calls `Tone.start()`, then calls `bootstrap(runtime)`.
+Call it directly only from a real user-input handler. `runtime` exposes the Tone
+bus APIs `buildBuses`, `getBuses`, `setBusVolume`, `muteBus`, `duckBus`, and
+`disposeBuses`. It is unavailable before this transaction succeeds.
+
+### `registerToneLazyGestureTrigger(bootstrap)`
+
+Registers the same capture-phase `click`, `keydown`, and `touchstart` trigger as
+the root lifecycle. It defers the Tone runtime import until the first gesture.
+An uncached dynamic module may finish after a browser's transient activation has
+expired, so the first attempt can reject on a slow first load; the trigger stays
+armed and the next real gesture retries. Test first-load behavior in the target
+browser before treating audio as ready.
+
+### `isToneLazyEngineStarted()`
+
+Returns true only after the dynamic Tone load, Tone unlock, and the caller's
+bootstrap have all completed. `_resetToneLazyEngine()` is a test and hot-reload
+escape hatch, not application API.
 
 ## Lifecycle
 

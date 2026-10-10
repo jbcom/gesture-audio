@@ -192,14 +192,18 @@ describe('Tone runtime', () => {
     expect(runtimeModule.toneRuntime).toEqual(buses);
   });
 
-  function fakeContext(state: AudioContextState, fails = false) {
+  /** A context whose state moves when its transition settles: a tick later when `slow`, as a browser's does. */
+  function fakeContext(state: AudioContextState, fails = false, slow = false) {
+    const settle = () => (slow ? new Promise((resolve) => setTimeout(resolve, 0)) : undefined);
     const context = {
       state,
       suspend: vi.fn(async () => {
+        await settle();
         if (fails) throw new Error('refused');
         context.state = 'suspended';
       }),
       resume: vi.fn(async () => {
+        await settle();
         if (fails) throw new Error('refused');
         context.state = 'running';
       }),
@@ -227,14 +231,34 @@ describe('Tone runtime', () => {
     expect(context.state).toBe('running');
   });
 
+  it('ends in the latest request when opposite ones arrive before the first transition settles', async () => {
+    const context = fakeContext('running', false, true);
+    const { setToneSuspended } = await runtimeOn(context);
+
+    // Backgrounded and straight back: the second request comes while suspend() is in flight,
+    // when the context still reads 'running'.
+    const away = setToneSuspended(true);
+    const back = setToneSuspended(false);
+    await Promise.all([away, back]);
+    expect(context.state).toBe('running');
+
+    const backAgain = setToneSuspended(false);
+    const awayAgain = setToneSuspended(true);
+    await Promise.all([backAgain, awayAgain]);
+    expect(context.state).toBe('suspended');
+  });
+
   it('leaves a closed, offline or refusing context alone without throwing', async () => {
     const closed = fakeContext('closed');
     await (await runtimeOn(closed)).setToneSuspended(false);
     expect(closed.resume).not.toHaveBeenCalled();
     vi.resetModules();
 
-    const offline = { state: 'running', resume: vi.fn() };
-    await expect((await runtimeOn(offline)).setToneSuspended(true)).resolves.toBeUndefined();
+    // An OfflineAudioContext has suspend(suspendTime) and resume() too; a paused render is not
+    // the app's to resume.
+    const offline = { ...fakeContext('suspended'), startRendering: vi.fn() };
+    await expect((await runtimeOn(offline)).setToneSuspended(false)).resolves.toBeUndefined();
+    expect(offline.resume).not.toHaveBeenCalled();
     vi.resetModules();
 
     const refusing = fakeContext('running', true);

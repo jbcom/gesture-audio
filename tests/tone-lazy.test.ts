@@ -248,6 +248,42 @@ describe('Tone runtime', () => {
     expect(context.state).toBe('suspended');
   });
 
+  it('applies a request made while a transition is in flight, or just as it settles', async () => {
+    let settle: () => void = () => {};
+    const context = fakeContext('running');
+    context.suspend.mockImplementation(
+      () =>
+        new Promise<void>((resolve) => {
+          settle = () => {
+            context.state = 'suspended';
+            resolve();
+          };
+        }),
+    );
+    const { setToneSuspended } = await runtimeOn(context);
+
+    const away = setToneSuspended(true);
+    await vi.waitFor(() => expect(context.suspend).toHaveBeenCalledOnce());
+    // suspend() is in flight and the context still reads 'running'.
+    const back = setToneSuspended(false);
+    settle();
+    await Promise.all([away, back]);
+    expect(context.resume).toHaveBeenCalledOnce();
+    expect(context.state).toBe('running');
+
+    // The opposite request landing in each of the ticks after the transition settles, where
+    // a pass that has made its last check but not yet ended must not swallow it.
+    for (let ticks = 0; ticks <= 6; ticks++) {
+      const awayAgain = setToneSuspended(true);
+      await vi.waitFor(() => expect(context.suspend).toHaveBeenCalledTimes(ticks + 2));
+      settle();
+      for (let tick = 0; tick < ticks; tick++) await Promise.resolve();
+      const backAgain = setToneSuspended(false);
+      await Promise.all([awayAgain, backAgain]);
+      expect(context.state, `a request ${ticks} ticks after the settle`).toBe('running');
+    }
+  });
+
   it('leaves a closed, offline or refusing context alone without throwing', async () => {
     const closed = fakeContext('closed');
     await (await runtimeOn(closed)).setToneSuspended(false);

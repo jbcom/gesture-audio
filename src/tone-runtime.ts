@@ -68,32 +68,28 @@ async function reconcile(): Promise<void> {
   // One tick first, so every request made in the same turn is in `wanted` before the first look.
   await undefined;
   try {
-    await apply();
-  } finally {
-    // In the same step as the last look at `wanted`: a request after this starts a new pass.
-    reconciling = null;
-  }
-}
-
-async function apply(): Promise<void> {
-  const ctx = Tone.getContext().rawContext as unknown as Partial<SuspendableContext>;
-  if (typeof ctx.suspend !== 'function' || typeof ctx.resume !== 'function') return;
-  if ('startRendering' in ctx) return;
-  for (;;) {
-    const target = wanted;
-    if (ctx.state === 'closed') return;
-    try {
-      if (target) {
-        if (ctx.state === 'running') await ctx.suspend();
-      } else if (ctx.state !== 'running') {
-        await ctx.resume();
+    const ctx = Tone.getContext().rawContext as unknown as Partial<SuspendableContext>;
+    if (typeof ctx.suspend !== 'function' || typeof ctx.resume !== 'function') return;
+    if ('startRendering' in ctx) return;
+    for (;;) {
+      const target = wanted;
+      if (ctx.state === 'closed') return;
+      try {
+        if (target) {
+          if (ctx.state === 'running') await ctx.suspend();
+        } else if (ctx.state !== 'running') {
+          await ctx.resume();
+        }
+      } catch {
+        // A context closed mid-transition, or one the browser refuses to move,
+        // is the same "nothing to do" as above: unless a newer request came in.
       }
-    } catch {
-      // A context closed mid-transition, or one the browser refuses to move,
-      // is the same "nothing to do" as above.
+      // A request that came in during the transition is applied next.
       if (wanted === target) return;
     }
-    // A request that came in during the transition is applied next.
-    if (wanted === target) return;
+  } finally {
+    // Synchronously after the last look at `wanted` (no await between): a
+    // request made after this starts a new pass instead of joining a finished one.
+    reconciling = null;
   }
 }

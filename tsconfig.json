@@ -19,6 +19,7 @@
     "paths": {
       "gesture-audio": ["./src/index.ts"],
       "gesture-audio/howler": ["./src/howler.ts"],
+      "gesture-audio/tone-lazy": ["./src/tone-lazy.ts"],
       "gesture-audio/build-tools": ["./src/build-tools/index.ts"]
     },
     "types": ["node", "vitest/globals"]

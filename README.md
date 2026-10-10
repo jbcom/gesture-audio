@@ -34,8 +34,11 @@ npm install gesture-audio tone howler
 ```
 
 `tone` and `howler` are peer dependencies, so the application owns their versions.
-`tone` is an optional peer: an application that plays everything through Howler
-sprites can skip it and import [`gesture-audio/howler`](#howler-only-entry-point).
+Each is optional, and the entry point decides which one an application needs:
+one that plays everything through Howler sprites can skip `tone` and import
+[`gesture-audio/howler`](#howler-only-entry-point), and one that synthesises
+everything with Tone can skip `howler` and import `gesture-audio/tone-lazy`.
+The root entry uses both.
 
 ## Compatibility
 

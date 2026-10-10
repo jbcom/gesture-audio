@@ -73,6 +73,17 @@ Returns true only after the dynamic Tone load, Tone unlock, and the caller's
 bootstrap have all completed. `_resetToneLazyEngine()` is a test and hot-reload
 escape hatch, not application API.
 
+### `setToneLazySuspended(suspended)`
+
+Suspends (`true`) or resumes (`false`) Tone's `AudioContext`, for example from
+an app lifecycle's pause and resume, so scheduled notes, loops and ramps hold
+their place while the app is backgrounded instead of running on silently. It
+is the Tone counterpart of `setAudioSuspended`. Until a start has unlocked Tone
+it resolves without loading Tone or touching any context, since resuming a
+context no gesture unlocked would try to start audio outside one. It is a no-op
+on a closed context or one already in the requested state, and it never throws.
+A resume outside a user gesture may stay pending until the browser allows it.
+
 ## Lifecycle
 
 ### `startAudioEngine(bootstrap)`

@@ -9,9 +9,10 @@ description: Register a gesture trigger, build buses, resolve sprites, and apply
 npm install gesture-audio tone howler
 ```
 
-`tone` and `howler` are peer dependencies (`tone` is optional if you import
-`gesture-audio/howler`, the Howler-only entry), so the application chooses their
-versions. Node.js 22, 24 and 26 are supported for development tooling
+`tone` and `howler` are peer dependencies, so the application chooses their
+versions. Each is optional: `tone` if you import `gesture-audio/howler`, the
+Howler-only entry, and `howler` if you import `gesture-audio/tone-lazy`, the
+Howler-free lazy Tone entry. The root entry uses both. Node.js 22, 24 and 26 are supported for development tooling
 (`engines.node: >=22`); no exact patch release is required.
 
 ## Bootstrap after a gesture

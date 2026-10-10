@@ -4,6 +4,14 @@ Notable changes to this project are recorded here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and releases follow
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.0](https://github.com/jbcom/gesture-audio/compare/v0.5.0...v0.6.0) (2026-10-10)
+
+
+### Features
+
+* add lazy Tone lifecycle entry ([ea5d738](https://github.com/jbcom/gesture-audio/commit/ea5d738f24b16cc6e86bad098d671dac4f6ad01d))
+* add lazy Tone lifecycle entry ([5749e47](https://github.com/jbcom/gesture-audio/commit/5749e47f2f198baa577d7a42d6e24732d5445035))
+
 ## [0.5.0](https://github.com/jbcom/gesture-audio/compare/v0.4.0...v0.5.0) (2026-10-09)
 
 

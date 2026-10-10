@@ -8,6 +8,27 @@ afterEach(() => {
   vi.resetModules();
 });
 
+function busRuntime() {
+  return {
+    buildBuses: vi.fn(),
+    disposeBuses: vi.fn(),
+    duckBus: vi.fn(),
+    getBuses: vi.fn(),
+    muteBus: vi.fn(),
+    setBusVolume: vi.fn(),
+  };
+}
+
+/** Stands in for the dynamically loaded runtime chunk; returns the bus runtime it hands out. */
+function mockRuntime(
+  startTone: () => Promise<void>,
+  setToneSuspended: (suspended: boolean) => Promise<void> = vi.fn().mockResolvedValue(undefined),
+) {
+  const runtime = busRuntime();
+  vi.doMock('../src/tone-runtime', () => ({ startTone, setToneSuspended, toneRuntime: runtime }));
+  return runtime;
+}
+
 describe('gesture-audio/tone-lazy', () => {
   it('imports without evaluating Tone', async () => {
     vi.resetModules();
@@ -22,23 +43,40 @@ describe('gesture-audio/tone-lazy', () => {
         '_resetToneLazyEngine',
         'isToneLazyEngineStarted',
         'registerToneLazyGestureTrigger',
+        'setToneLazySuspended',
         'startToneLazyEngine',
       ].sort(),
     );
     expect(entry.isToneLazyEngineStarted()).toBe(false);
   });
 
+  it('suspends and resumes Tone only once a start has unlocked it', async () => {
+    const startTone = vi
+      .fn<() => Promise<void>>()
+      .mockRejectedValueOnce(new Error('locked'))
+      .mockResolvedValueOnce(undefined);
+    const setToneSuspended = vi.fn().mockResolvedValue(undefined);
+    mockRuntime(startTone, setToneSuspended);
+    const entry = await import('../src/tone-lazy');
+
+    await entry.setToneLazySuspended(true);
+    await expect(entry.startToneLazyEngine(vi.fn())).rejects.toThrow('locked');
+    await entry.setToneLazySuspended(false);
+    expect(setToneSuspended).not.toHaveBeenCalled();
+
+    await entry.startToneLazyEngine(vi.fn().mockResolvedValue(undefined));
+    await entry.setToneLazySuspended(true);
+    await entry.setToneLazySuspended(false);
+    expect(setToneSuspended.mock.calls).toEqual([[true], [false]]);
+
+    entry._resetToneLazyEngine();
+    await entry.setToneLazySuspended(true);
+    expect(setToneSuspended).toHaveBeenCalledTimes(2);
+  });
+
   it('loads Tone and supplies its runtime only after start', async () => {
     const startTone = vi.fn().mockResolvedValue(undefined);
-    const runtime = {
-      buildBuses: vi.fn(),
-      disposeBuses: vi.fn(),
-      duckBus: vi.fn(),
-      getBuses: vi.fn(),
-      muteBus: vi.fn(),
-      setBusVolume: vi.fn(),
-    };
-    vi.doMock('../src/tone-runtime', () => ({ startTone, toneRuntime: runtime }));
+    const runtime = mockRuntime(startTone);
     const entry = await import('../src/tone-lazy');
     const bootstrap = vi.fn().mockResolvedValue(undefined);
 
@@ -54,15 +92,7 @@ describe('gesture-audio/tone-lazy', () => {
       .fn<() => Promise<void>>()
       .mockRejectedValueOnce(new Error('locked'))
       .mockResolvedValueOnce(undefined);
-    const runtime = {
-      buildBuses: vi.fn(),
-      disposeBuses: vi.fn(),
-      duckBus: vi.fn(),
-      getBuses: vi.fn(),
-      muteBus: vi.fn(),
-      setBusVolume: vi.fn(),
-    };
-    vi.doMock('../src/tone-runtime', () => ({ startTone, toneRuntime: runtime }));
+    mockRuntime(startTone);
     const entry = await import('../src/tone-lazy');
     const bootstrap = vi.fn().mockResolvedValue(undefined);
 
@@ -76,19 +106,11 @@ describe('gesture-audio/tone-lazy', () => {
 
   it('keeps a bootstrap rejection retryable', async () => {
     const startTone = vi.fn().mockResolvedValue(undefined);
-    const runtime = {
-      buildBuses: vi.fn(),
-      disposeBuses: vi.fn(),
-      duckBus: vi.fn(),
-      getBuses: vi.fn(),
-      muteBus: vi.fn(),
-      setBusVolume: vi.fn(),
-    };
     const bootstrap = vi
       .fn<() => Promise<void>>()
       .mockRejectedValueOnce(new Error('bootstrap failed'))
       .mockResolvedValueOnce(undefined);
-    vi.doMock('../src/tone-runtime', () => ({ startTone, toneRuntime: runtime }));
+    mockRuntime(startTone);
     const entry = await import('../src/tone-lazy');
 
     await expect(entry.startToneLazyEngine(bootstrap)).rejects.toThrow('bootstrap failed');
@@ -105,15 +127,7 @@ describe('gesture-audio/tone-lazy', () => {
       resolveUnlock = resolveUnlockPending;
     });
     const startTone = vi.fn().mockReturnValue(unlockPending);
-    const runtime = {
-      buildBuses: vi.fn(),
-      disposeBuses: vi.fn(),
-      duckBus: vi.fn(),
-      getBuses: vi.fn(),
-      muteBus: vi.fn(),
-      setBusVolume: vi.fn(),
-    };
-    vi.doMock('../src/tone-runtime', () => ({ startTone, toneRuntime: runtime }));
+    mockRuntime(startTone);
     const entry = await import('../src/tone-lazy');
     const bootstrap = vi.fn().mockResolvedValue(undefined);
 
@@ -134,15 +148,7 @@ describe('gesture-audio/tone-lazy', () => {
       resolveBootstrap = resolveBootstrapPending;
     });
     const startTone = vi.fn().mockResolvedValue(undefined);
-    const runtime = {
-      buildBuses: vi.fn(),
-      disposeBuses: vi.fn(),
-      duckBus: vi.fn(),
-      getBuses: vi.fn(),
-      muteBus: vi.fn(),
-      setBusVolume: vi.fn(),
-    };
-    vi.doMock('../src/tone-runtime', () => ({ startTone, toneRuntime: runtime }));
+    mockRuntime(startTone);
     const entry = await import('../src/tone-lazy');
     const bootstrap = vi.fn().mockReturnValue(bootstrapPending);
 
@@ -157,15 +163,7 @@ describe('gesture-audio/tone-lazy', () => {
 
   it('starts from a registered real-gesture listener and resets for hot reload', async () => {
     const startTone = vi.fn().mockResolvedValue(undefined);
-    const runtime = {
-      buildBuses: vi.fn(),
-      disposeBuses: vi.fn(),
-      duckBus: vi.fn(),
-      getBuses: vi.fn(),
-      muteBus: vi.fn(),
-      setBusVolume: vi.fn(),
-    };
-    vi.doMock('../src/tone-runtime', () => ({ startTone, toneRuntime: runtime }));
+    const runtime = mockRuntime(startTone);
     const entry = await import('../src/tone-lazy');
     const bootstrap = vi.fn().mockResolvedValue(undefined);
     const remove = entry.registerToneLazyGestureTrigger(bootstrap);
@@ -183,14 +181,7 @@ describe('gesture-audio/tone-lazy', () => {
 describe('Tone runtime', () => {
   it('starts Tone and exposes only the bus runtime after it has loaded', async () => {
     const start = vi.fn().mockResolvedValue(undefined);
-    const buses = {
-      buildBuses: vi.fn(),
-      disposeBuses: vi.fn(),
-      duckBus: vi.fn(),
-      getBuses: vi.fn(),
-      muteBus: vi.fn(),
-      setBusVolume: vi.fn(),
-    };
+    const buses = busRuntime();
     vi.doMock('tone', () => ({ start }));
     vi.doMock('../src/buses', () => buses);
 
@@ -199,5 +190,55 @@ describe('Tone runtime', () => {
 
     expect(start).toHaveBeenCalledOnce();
     expect(runtimeModule.toneRuntime).toEqual(buses);
+  });
+
+  function fakeContext(state: AudioContextState, fails = false) {
+    const context = {
+      state,
+      suspend: vi.fn(async () => {
+        if (fails) throw new Error('refused');
+        context.state = 'suspended';
+      }),
+      resume: vi.fn(async () => {
+        if (fails) throw new Error('refused');
+        context.state = 'running';
+      }),
+    };
+    return context;
+  }
+
+  async function runtimeOn(rawContext: object) {
+    vi.doMock('tone', () => ({ getContext: () => ({ rawContext }) }));
+    return import('../src/tone-runtime');
+  }
+
+  it('suspends a running context and resumes a suspended one, once each', async () => {
+    const context = fakeContext('running');
+    const { setToneSuspended } = await runtimeOn(context);
+
+    await setToneSuspended(true);
+    await setToneSuspended(true);
+    expect(context.suspend).toHaveBeenCalledOnce();
+    expect(context.state).toBe('suspended');
+
+    await setToneSuspended(false);
+    await setToneSuspended(false);
+    expect(context.resume).toHaveBeenCalledOnce();
+    expect(context.state).toBe('running');
+  });
+
+  it('leaves a closed, offline or refusing context alone without throwing', async () => {
+    const closed = fakeContext('closed');
+    await (await runtimeOn(closed)).setToneSuspended(false);
+    expect(closed.resume).not.toHaveBeenCalled();
+    vi.resetModules();
+
+    const offline = { state: 'running', resume: vi.fn() };
+    await expect((await runtimeOn(offline)).setToneSuspended(true)).resolves.toBeUndefined();
+    vi.resetModules();
+
+    const refusing = fakeContext('running', true);
+    await expect((await runtimeOn(refusing)).setToneSuspended(true)).resolves.toBeUndefined();
+    expect(refusing.state).toBe('running');
   });
 });

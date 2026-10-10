@@ -13,11 +13,15 @@ import { type Bootstrap, createUnlockController } from './unlock-controller.js';
 export type ToneLazyBootstrap = (runtime: ToneRuntime) => ReturnType<Bootstrap>;
 
 let runtime: ToneRuntime | null = null;
+let suspend: ((suspended: boolean) => Promise<void>) | null = null;
 
 async function unlockToneRuntime(): Promise<void> {
   const loaded = await import('./tone-runtime.js');
   await loaded.startTone();
   runtime = loaded.toneRuntime;
+  // Only a context a gesture has unlocked is ours to move: resuming one that
+  // never started would try to start audio outside a gesture.
+  suspend = loaded.setToneSuspended;
 }
 
 function withRuntime(bootstrap: ToneLazyBootstrap): Bootstrap {
@@ -55,8 +59,20 @@ export function isToneLazyEngineStarted(): boolean {
   return controller.isAudioEngineStarted();
 }
 
+/**
+ * Suspend (`true`) or resume (`false`) Tone's AudioContext, e.g. from an app
+ * lifecycle's pause and resume. Until a start has unlocked Tone there is no
+ * context of ours to move, so this resolves without loading Tone; it never
+ * throws. Resuming outside a user gesture may stay pending until the browser
+ * allows it.
+ */
+export async function setToneLazySuspended(suspended: boolean): Promise<void> {
+  await suspend?.(suspended);
+}
+
 /** Test / hot-reload only. Does not dispose Tone's global AudioContext or buses. */
 export function _resetToneLazyEngine(): void {
   runtime = null;
+  suspend = null;
   controller.reset();
 }

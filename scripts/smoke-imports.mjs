@@ -71,6 +71,19 @@ for (const [label, entry] of [
   }
 }
 
+// The lazy Tone entry is the Howler-free side: an app on it installs only
+// `tone`, so its graph (the dynamic runtime chunk included) must never reach
+// `howler`, which is an optional peer for exactly that reason.
+for (const [label, entry] of [
+  ['ESM', resolve(root, 'esm', 'tone-lazy.js')],
+  ['CommonJS', resolve(root, 'cjs', 'tone-lazy.cjs')],
+]) {
+  const bare = bareImports(entry);
+  if (bare.join() !== 'tone') {
+    throw new Error(`${label} lazy Tone entry imports unexpected packages: ${bare.join(', ')}`);
+  }
+}
+
 console.log(
-  'ESM and CommonJS runtime/Howler-only/build-tools imports succeeded; Howler entry is Tone-free.',
+  'ESM and CommonJS runtime/Howler-only/lazy-Tone/build-tools imports succeeded; Howler entry is Tone-free and lazy Tone entry is Howler-free.',
 );

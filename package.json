@@ -88,6 +88,9 @@
     "tone": "^15.0.0"
   },
   "peerDependenciesMeta": {
+    "howler": {
+      "optional": true
+    },
     "tone": {
       "optional": true
     }

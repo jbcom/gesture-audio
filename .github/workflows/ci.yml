@@ -34,30 +34,18 @@ jobs:
     outputs:
       skip-validation: ${{ steps.classify.outputs.skip-validation }}
     steps:
-      - name: Read Dependabot update metadata
-        id: dependabot
-        if: >-
-          github.event_name == 'pull_request' &&
-          github.event.pull_request.user.login == 'dependabot[bot]'
-        uses: dependabot/fetch-metadata@25dd0e34f4fe68f24cc83900b1fe3fe149efef98 # v3.1.0
-        with:
-          github-token: ${{ github.token }}
       - name: Classify validation policy
         id: classify
         env:
           PR_AUTHOR: ${{ github.event.pull_request.user.login }}
           PR_HEAD_REF: ${{ github.event.pull_request.head.ref }}
           PR_HEAD_REPOSITORY: ${{ github.event.pull_request.head.repo.full_name }}
-          UPDATE_TYPE: ${{ steps.dependabot.outputs.update-type }}
         run: |
           skip_validation=false
           reason=ordinary-change
           if [[ "$PR_HEAD_REPOSITORY" == "$GITHUB_REPOSITORY" && ( "$PR_AUTHOR" == "github-actions[bot]" || "$PR_AUTHOR" == "app/github-actions" || "$PR_AUTHOR" == "jbdevprimary" ) && "$PR_HEAD_REF" == release-please--* ]]; then
             skip_validation=true
             reason=release-please
-          elif [[ "$PR_AUTHOR" == "dependabot[bot]" && ( "$UPDATE_TYPE" == *:semver-minor || "$UPDATE_TYPE" == *:semver-patch ) ]]; then
-            skip_validation=true
-            reason=dependabot-non-major
           fi
           echo "skip-validation=$skip_validation" >> "$GITHUB_OUTPUT"
           echo "Validation policy: $reason"
@@ -167,7 +155,7 @@ jobs:
     steps:
       - name: Validation intentionally bypassed for vetted maintenance PR
         if: needs.classify.outputs.skip-validation == 'true'
-        run: echo "Release-please and Dependabot non-major PRs are vetted encapsulations of the existing process."
+        run: echo "Release-please PRs are vetted encapsulations of the existing process."
       - if: needs.classify.outputs.skip-validation != 'true'
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
